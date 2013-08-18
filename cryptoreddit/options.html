@@ -1,0 +1,50 @@
+<html>
+<head>
+	<title>Manage keys</title>
+    <style>
+      body, td, input, button {
+        font-size:14pt;
+      }
+        textarea {
+        width:700px;
+        height:100px;
+        font-family: Courier, fixed;
+        font-size:14pt;
+      }
+    </style>
+
+<script src="./js/external/jquery.js" type="text/javascript" charset="utf-8"></script>
+<script src="./js/external/openpgp.min.js" type="text/javascript" charset="utf-8"></script>
+<script src="./js/options.js" type="text/javascript" charset="utf-8"></script>
+
+</head>
+<body>
+
+<h1>Others' keys</h1>
+<button id="updateButton">get the latest from /r/cryptoredditkeys</button>
+<br/><br/>
+<input type="text" style="width:700px;" id="importUsername" placeholder="username (make sure to get the capitalization right!)" />
+<br/>
+<textarea id="importKeytext" placeholder="PUBLIC KEY"></textarea>
+<br/>
+<button id="importButton">import</button>
+<br/><br/>
+<table border=1 id="othersKeysTable"></table>
+
+<hr/>
+
+<h1>Your keys</h1>
+<input type="text" style="width:700px;" id="importYourUsername" placeholder="your username (make sure to get the capitalization right!)" />
+<br/>
+<textarea id="importYourPublicKeytext" placeholder="PUBLIC KEY"></textarea>
+<br/>
+<textarea id="importYourPrivateKeytext" placeholder="PRIVATE KEY"></textarea>
+<br/>
+<button id="generateYourButton">generate</button>
+<button id="importYourButton">import</button>
+<br/><br/>
+<table border=1 id="yourKeysTable"></table>
+<br/><br/>
+
+</body>
+</html>
