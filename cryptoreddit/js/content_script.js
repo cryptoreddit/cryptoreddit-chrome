@@ -11,21 +11,25 @@ chrome.storage.local.get('yourKeys', function(x) {
 	for (var i=0; i<yourKeys.length; i++) {
 		PRIVATE_KEYS.push(yourKeys[i].privateKeytext);
 	}
+
+	chrome.storage.local.get('othersKeys', function(y) {
+		var othersKeys;
+		if (y.othersKeys && y.othersKeys.length) {
+			othersKeys = y.othersKeys;
+		} else {
+			othersKeys = [];
+		}
+		console.log(othersKeys);
+		for (var i=othersKeys.length-1; i>=0; i--) {
+			if (!PUBLIC_KEYS[othersKeys[i].username]) {
+				PUBLIC_KEYS[othersKeys[i].username] = othersKeys[i].keytext;
+			}
+		}
+		mainFunction();
+	});
 });
 
-chrome.storage.local.get('othersKeys', function(x) {
-	var othersKeys;
-	if (x.othersKeys && x.othersKeys.length) {
-		othersKeys = x.othersKeys;
-	} else {
-		othersKeys = [];
-	}
-	for (var i=othersKeys.length-1; i>=0; i--) {
-		if (!PUBLIC_KEYS[othersKeys[i].username]) {
-			PUBLIC_KEYS[othersKeys[i].username] = othersKeys[i].keytext;
-		}
-	}
-});
+
 
 
 function encrypt(messageText, publicKey) {
@@ -155,12 +159,4 @@ var mainFunction = function() {
 			});
 		}
 	});
-
-
-};
-
-var mto = setTimeout(mainFunction, 700);
-$(function(){
-	clearTimeout(mto);
-	mainFunction();
-});
+}
