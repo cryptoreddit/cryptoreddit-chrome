@@ -83,9 +83,7 @@ function decrypt(messageText, privateKey) {
 }
 
 
-
-
-$(function() {
+var mainFunction = function() {
 	//Decrypt all messages whose keys we know.
     $('div.md').each(function(){
     	if ( $(this).text().indexOf("-----BEGIN PGP MESSAGE-----") === 0 ) {
@@ -159,4 +157,10 @@ $(function() {
 	});
 
 
+};
+
+var mto = setTimeout(mainFunction, 700);
+$(function(){
+	clearTimeout(mto);
+	mainFunction();
 });
