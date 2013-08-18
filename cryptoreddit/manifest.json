@@ -1,0 +1,21 @@
+{
+    "name": "CryptoReddit",
+    "version": "0.1",
+
+    "options_page": "options.html",
+    "description": "PGP on Reddit",
+    "permissions": ["storage"],
+
+    "content_scripts": [
+        {
+            "matches": ["http://www.reddit.com/*"],
+            "js": [
+                    "/js/external/jquery.js", 
+                    "/js/external/openpgp.min.js", 
+                    "/js/content_script.js"
+                ]
+        }
+    ],
+
+    "manifest_version": 2
+}
