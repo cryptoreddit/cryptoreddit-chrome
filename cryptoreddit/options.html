@@ -1,15 +1,18 @@
 <html>
 <head>
-	<title>Manage keys</title>
+	<title>CryptoReddit - Manage</title>
     <style>
       body, td, input, button {
         font-size:14pt;
       }
-        textarea {
+      textarea {
         width:700px;
         height:100px;
         font-family: Courier, fixed;
         font-size:14pt;
+      }
+      input[type="text"] {
+        width:700px;
       }
     </style>
 
@@ -20,10 +23,23 @@
 </head>
 <body>
 
-<h1>Others' keys</h1>
-<button id="updateButton">get the latest from /r/cryptoredditkeys</button>
-<br/><br/>
-<input type="text" style="width:700px;" id="importUsername" placeholder="username (make sure to get the capitalization right!)" />
+<h1>CryptoReddit - Manage</h1>
+
+<ul>
+  <li><a href="#managekeys">Manage keys</a></li>
+  <li><a href="#manageusergroups">Manage user groups</a></li>
+  <li><a href="#backupeverything">Back up everything</a></li>
+  <li><a href="#encryptiontool">Encryption tool</a></li>
+</ul>
+
+<hr/>
+
+<h1><a name="managekeys">Manage keys</a></h1>
+
+<h2>Others' keys</h2>
+<!--<button id="updateButton">get the latest from /r/cryptoredditkeys</button>
+<br/><br/>-->
+<input type="text" id="importUsername" placeholder="username (make sure to get the capitalization right!)" />
 <br/>
 <textarea id="importKeytext" placeholder="PUBLIC KEY"></textarea>
 <br/>
@@ -31,10 +47,8 @@
 <br/><br/>
 <table border=1 id="othersKeysTable"></table>
 
-<hr/>
-
-<h1>Your keys</h1>
-<input type="text" style="width:700px;" id="importYourUsername" placeholder="your username (make sure to get the capitalization right!)" />
+<h2>Your keys</h2>
+<input type="text" id="importYourUsername" placeholder="your username (make sure to get the capitalization right!)" />
 <br/>
 <textarea id="importYourPublicKeytext" placeholder="PUBLIC KEY"></textarea>
 <br/>
@@ -44,7 +58,62 @@
 <button id="importYourButton">import</button>
 <br/><br/>
 <table border=1 id="yourKeysTable"></table>
-<br/><br/>
 
+
+<hr/>
+
+
+<h1><a name="manageusergroups">Manage user groups</a></h1>
+
+
+<button id="createGroupButton">create new group</button>
+<br/><br/>
+<table id="userGroupsTable" border=1></table>
+
+
+<hr/>
+
+
+
+<h1><a name="backupeverything">Back up everything</a></h1>
+
+<textarea id="backup" placeholder='Press "dump" to fill this box with your backup, or paste your backup here and press "load".'></textarea>
+<br/>
+<button id="dumpButton">dump</button>
+<button id="loadButton">load</button>
+
+
+<hr/>
+
+
+
+<h1><a name="encryptiontool">Encryption tool</a></h1>
+
+<ul>
+  <li>List one or more recipients below, separated by single spaces.
+    <ul><li>Don't forget to include yourself!</li>
+    <li>Make sure your own public key is listed under "Other's keys".</li></ul>
+  </li>
+  <li>Usernames are case-sensitive.</li>
+  <li>Leave blank to use the entire "Others' keys" list.</li>
+  <li>Include a group by prefixing its name with an @ symbol (e.g. <tt>@groupname</tt>).
+    <ul><li>Group members whose keys you don't have won't be included.</li></ul>
+  </li>
+  <li>Specifically exclude someone by prefixing their username with a ! symbol (e.g. <tt>!username</tt>).
+    <ul><li>This takes precedence over inclusion in a group.</li></ul>
+  </li>
+</ul>
+
+<input id="recipients" type="text" placeholder="recipients" />
+<br/>
+<textarea id="cleartextMessage" placeholder="the message you want to encrypt"></textarea>
+<br/>
+<button id="encryptButton">encrypt</button>
+<br/>
+<textarea id="encryptedMessage" placeholder="The encrypted message will appear here."></textarea>
+
+
+
+<br/><br/>
 </body>
 </html>

@@ -1,5 +1,6 @@
 var PRIVATE_KEYS = [];
 var PUBLIC_KEYS = {};
+var othersKeys;
 
 chrome.storage.local.get('yourKeys', function(x) {
 	var yourKeys;
@@ -11,30 +12,41 @@ chrome.storage.local.get('yourKeys', function(x) {
 	for (var i=0; i<yourKeys.length; i++) {
 		PRIVATE_KEYS.push(yourKeys[i].privateKeytext);
 	}
+
+	chrome.storage.local.get('othersKeys', function(y) {
+		//var othersKeys;
+		if (y.othersKeys && y.othersKeys.length) {
+			othersKeys = y.othersKeys;
+		} else {
+			othersKeys = [];
+		}
+		for (var i=othersKeys.length-1; i>=0; i--) {
+			if (!PUBLIC_KEYS[othersKeys[i].username]) {
+				PUBLIC_KEYS[othersKeys[i].username] = othersKeys[i].keytext;
+			}
+		}
+		mainFunction();
+	});
 });
 
-chrome.storage.local.get('othersKeys', function(x) {
-	var othersKeys;
-	if (x.othersKeys && x.othersKeys.length) {
-		othersKeys = x.othersKeys;
-	} else {
-		othersKeys = [];
-	}
-	for (var i=othersKeys.length-1; i>=0; i--) {
-		if (!PUBLIC_KEYS[othersKeys[i].username]) {
-			PUBLIC_KEYS[othersKeys[i].username] = othersKeys[i].keytext;
-		}
-	}
-});
+
 
 
 function encrypt(messageText, publicKey) {
   if (window.crypto.getRandomValues) {
-    openpgp.init();
-    var pub_key = openpgp.read_publicKey(publicKey);
-    //var my_pub_key = openpgp.read_publicKey(MY_PUBLIC_KEY);
-    //pub_key[1]=my_pub_key[0]; //Don't do this unless you can make sure that anonymity is not compromised when someone is using multiple accounts.
-    return openpgp.write_encrypted_message(pub_key,messageText);
+  	try {
+	    openpgp.init();
+	    var pub_key = openpgp.read_publicKey(publicKey);
+	    var postingAs = $(".user").first().children().first().text(); //DOES THIS WORK WITH RES?
+	    //var my_pub_key = openpgp.read_publicKey(MY_PUBLIC_KEY);
+	    //pub_key[1]=my_pub_key[0]; //Don't do this unless you can make sure that anonymity is not compromised when someone is using multiple accounts.
+	    var result = openpgp.write_encrypted_message(pub_key,messageText);
+	    result = result.replace("Comment: http://openpgpjs.org", "Comment: /r/cryptoreddit");
+	    return result;
+	} catch(error) {
+		alert("Could not encrypt; one or more of the encryption keys may be invalid.");
+		return false;
+	}
   } else {
     alert("Could not encrypt; your browser is not supported.");
     return false; 
@@ -101,6 +113,43 @@ var mainFunction = function() {
     		} else {
     			$(this).css('color','#999');
     		}
+    	} else if ($(this).text().indexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----") === 0) {
+    		var username = $(this).closest("form").parent().find(".author").first().text();
+    		if (!PUBLIC_KEYS[username]) {
+    			$(this).css('color','#f0f');
+	    		$(this).css('cursor','pointer');
+	    		$(this).on('click', function(){
+	    			if (confirm("Import this key for user "+username + "?")) {
+	    				PUBLIC_KEYS[username] = $(this).text();
+	    				//TODO: refactor to avoid repeating this code
+						var timestamp = new Date().getTime();
+						var source = "";
+						var id=-1;
+						for (var i=0; i<othersKeys.length; i++) {
+							if (id < othersKeys[i].id) {
+								id = othersKeys[i].id;
+							}
+						}
+						id = id+1;
+						var entry = {
+							username:username,
+							keytext:$(this).text(),
+							timestamp:timestamp,
+							source:source,
+							id:id
+						};
+						othersKeys.push(entry);
+						var keyDiv = $(this);
+						chrome.storage.local.set({'othersKeys': othersKeys}, function() {
+							alert("Key imported! Reload to start sending encrypted messages to this user.");
+			    			keyDiv.css('color','inherit');
+				    		keyDiv.css('cursor','inherit');
+				    		keyDiv.unbind('click');
+				    		//TODO: distinguish this user as encryptable.
+						});
+	    			}
+	    		});
+    		}
     	}
     });
 
@@ -155,12 +204,4 @@ var mainFunction = function() {
 			});
 		}
 	});
-
-
-};
-
-var mto = setTimeout(mainFunction, 700);
-$(function(){
-	clearTimeout(mto);
-	mainFunction();
-});
+}
