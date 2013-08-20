@@ -235,7 +235,6 @@ var mainFunction = function() {
 							var keys = [];
 							//add our own key to the list...
 							var postingAs = $(".user").first().children().first().text(); //DOES THIS WORK WITH RES? YES!
-							alert("Posting as: "+postingAs);
 							if (PRIVATE_KEYS[postingAs]) {
 								keys.push(PRIVATE_KEYS[postingAs].publicKey);
 							} else {
