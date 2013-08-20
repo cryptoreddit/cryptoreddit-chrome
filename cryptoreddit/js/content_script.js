@@ -1,63 +1,59 @@
-var PRIVATE_KEYS = [];
+var PRIVATE_KEYS = {};
 var PUBLIC_KEYS = {};
 var othersKeys;
+var userGroups;
 
-chrome.storage.local.get('yourKeys', function(x) {
-	var yourKeys;
-	if (x.yourKeys && x.yourKeys.length) {
-		yourKeys = x.yourKeys;
+// Load stuff from memory, one by one
+chrome.storage.local.get('userGroups', function(w) {
+	if (w.userGroups && w.userGroups.length) {
+		userGroups = w.userGroups;
 	} else {
-		yourKeys = [];
-	}
-	for (var i=0; i<yourKeys.length; i++) {
-		PRIVATE_KEYS.push(yourKeys[i].privateKeytext);
+		userGroups = [];
 	}
 
-	chrome.storage.local.get('othersKeys', function(y) {
-		//var othersKeys;
-		if (y.othersKeys && y.othersKeys.length) {
-			othersKeys = y.othersKeys;
+	chrome.storage.local.get('yourKeys', function(x) {
+		var yourKeys;
+		if (x.yourKeys && x.yourKeys.length) {
+			yourKeys = x.yourKeys;
 		} else {
-			othersKeys = [];
+			yourKeys = [];
 		}
-		for (var i=othersKeys.length-1; i>=0; i--) {
-			if (!PUBLIC_KEYS[othersKeys[i].username]) {
-				PUBLIC_KEYS[othersKeys[i].username] = othersKeys[i].keytext;
+		for (var i=0; i<yourKeys.length; i++) {
+			PRIVATE_KEYS[yourKeys[i].username] = {privateKey:yourKeys[i].privateKeytext, publicKey:yourKeys[i].publicKeytext};
+		}
+
+		chrome.storage.local.get('othersKeys', function(y) {
+			//var othersKeys;
+			if (y.othersKeys && y.othersKeys.length) {
+				othersKeys = y.othersKeys;
+			} else {
+				othersKeys = [];
 			}
-		}
-		mainFunction();
+			for (var i=othersKeys.length-1; i>=0; i--) {
+				if (!PUBLIC_KEYS[othersKeys[i].username]) {
+					try {
+						openpgp.read_publicKey(othersKeys[i].keytext);
+						PUBLIC_KEYS[othersKeys[i].username] = othersKeys[i].keytext;
+					} catch(error) {
+						console.log("Could not import invalid key for /u/"+othersKeys[i].username);
+					}				
+				}
+			}
+			mainFunction();
+		});
 	});
 });
 
 
 
 
-function encrypt(messageText, publicKey) {
-  if (window.crypto.getRandomValues) {
-  	try {
-	    openpgp.init();
-	    var pub_key = openpgp.read_publicKey(publicKey);
-	    var postingAs = $(".user").first().children().first().text(); //DOES THIS WORK WITH RES?
-	    //var my_pub_key = openpgp.read_publicKey(MY_PUBLIC_KEY);
-	    //pub_key[1]=my_pub_key[0]; //Don't do this unless you can make sure that anonymity is not compromised when someone is using multiple accounts.
-	    var result = openpgp.write_encrypted_message(pub_key,messageText);
-	    result = result.replace("Comment: http://openpgpjs.org", "Comment: /r/cryptoreddit");
-	    return result;
-	} catch(error) {
-		alert("Could not encrypt; one or more of the encryption keys may be invalid.");
-		return false;
-	}
-  } else {
-    alert("Could not encrypt; your browser is not supported.");
-    return false; 
-  }
-}
+
 
 
 
 function decrypt(messageText, privateKey) {
   if (window.crypto.getRandomValues) {
-    openpgp.init();
+    //openpgp.init();
     var priv_key = openpgp.read_privateKey(privateKey);
     var msg = openpgp.read_message(messageText);
 
@@ -84,7 +80,12 @@ function decrypt(messageText, privateKey) {
         alert("Password for secret key was incorrect!");
         return;
       }*/
-      return msg[0].decrypt(keymat, sesskey);
+      try {
+      	return msg[0].decrypt(keymat, sesskey);
+      } catch(error) {
+      	return false;
+      }
+      
     } else {
       return false;
     }
@@ -95,60 +96,82 @@ function decrypt(messageText, privateKey) {
 }
 
 
+function decryptElement(element) {
+	var ciphertext = element.text();
+	if (element.html().indexOf("//#__") !== -1) {
+		ciphertext = element.html().replace(/_/g,"\n");
+	}
+	var decryption;
+	var private_key_usernames = Object.keys(PRIVATE_KEYS);
+	for (var i=0; i<private_key_usernames.length; i++) {
+		decryption = decrypt(ciphertext, PRIVATE_KEYS[private_key_usernames[i]].privateKey);
+		if (decryption) {break;}
+	}
+	if (decryption) {
+		element.addClass("encrypted");
+		element.text(decryption);
+		element.css('color','white');
+		element.css('background-color','black');
+		element.css('padding','5px');
+		element.css('margin','5px');
+	} else {
+		element.addClass("undecryptable");
+		element.css('color','lightgray');
+		element.css('font-size','5pt');
+	}
+}
+
 var mainFunction = function() {
-	//Decrypt all messages whose keys we know.
+	
     $('div.md').each(function(){
     	if ( $(this).text().indexOf("-----BEGIN PGP MESSAGE-----") === 0 ) {
-    		var decryption;
-    		for (var i=0; i<PRIVATE_KEYS.length; i++) {
-    			decryption = decrypt($(this).text(), PRIVATE_KEYS[i]);
-    			if (decryption) {break;}
-    		}
-    		if (decryption) {
-	    		$(this).text(decryption);
-	    		$(this).css('color','white');
-	    		$(this).css('background-color','black');
-	    		$(this).css('padding','5px');
-	    		$(this).css('margin','5px');
-    		} else {
-    			$(this).css('color','#999');
-    		}
+    		//Decrypt all messages whose keys we know.
+    		decryptElement($(this));
     	} else if ($(this).text().indexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----") === 0) {
+    		//Distinguish public keys we don't have yet.
     		var username = $(this).closest("form").parent().find(".author").first().text();
     		if (!PUBLIC_KEYS[username]) {
-    			$(this).css('color','#f0f');
-	    		$(this).css('cursor','pointer');
-	    		$(this).on('click', function(){
-	    			if (confirm("Import this key for user "+username + "?")) {
-	    				PUBLIC_KEYS[username] = $(this).text();
-	    				//TODO: refactor to avoid repeating this code
-						var timestamp = new Date().getTime();
-						var source = "";
-						var id=-1;
-						for (var i=0; i<othersKeys.length; i++) {
-							if (id < othersKeys[i].id) {
-								id = othersKeys[i].id;
+			    try {
+					openpgp.read_publicKey($(this).text());
+	    			$(this).addClass("newpublickey");
+	    			$(this).css('color','magenta');
+		    		$(this).css('cursor','pointer');
+		    		$(this).on('click', function(){
+		    			if (confirm("Import this key for user "+username + "?")) {
+		    				PUBLIC_KEYS[username] = $(this).text();
+		    				//TODO: refactor to avoid repeating this code
+
+							var timestamp = new Date().getTime();
+							var source = "";
+							var id=-1;
+							for (var i=0; i<othersKeys.length; i++) {
+								if (id < othersKeys[i].id) {
+									id = othersKeys[i].id;
+								}
 							}
-						}
-						id = id+1;
-						var entry = {
-							username:username,
-							keytext:$(this).text(),
-							timestamp:timestamp,
-							source:source,
-							id:id
-						};
-						othersKeys.push(entry);
-						var keyDiv = $(this);
-						chrome.storage.local.set({'othersKeys': othersKeys}, function() {
-							alert("Key imported! Reload to start sending encrypted messages to this user.");
-			    			keyDiv.css('color','inherit');
-				    		keyDiv.css('cursor','inherit');
-				    		keyDiv.unbind('click');
-				    		//TODO: distinguish this user as encryptable.
-						});
-	    			}
-	    		});
+							id = id+1;
+							var entry = {
+								username:username,
+								keytext:$(this).text(),
+								timestamp:timestamp,
+								source:source,
+								id:id
+							};
+							othersKeys.push(entry);
+							var keyDiv = $(this);
+							chrome.storage.local.set({'othersKeys': othersKeys}, function() {
+								alert("Key imported! Reload to start sending encrypted messages to this user.");
+				    			keyDiv.css('color','inherit');
+					    		keyDiv.css('cursor','inherit');
+					    		keyDiv.unbind('click');
+					    		//TODO: distinguish this user as encryptable.
+							});
+		    			}
+		    		});
+	    		} catch(error) {
+					console.log("couldnt read", $(this).text(), error);
+					return;
+				}
     		}
     	}
     });
@@ -158,37 +181,95 @@ var mainFunction = function() {
 		var author = $(this).text();
 		if (PUBLIC_KEYS[author]) {
 			$(this).css("background-color","black").css("color","yellow").css("padding","3px");
+			$(this).addClass("encryptable");
 			var rrb = $(this).closest(".thing").find(".buttons").find("a:contains('reply')").first();
 			rrb.on('click',function(){
 				if (!$(this).attr('alreadyclicked')) {
 					$(this).attr("alreadyclicked","yes")
 					var thing = $(this).closest('.thing');
-					var ta = thing.find('textarea');
+					var cancelB = thing.find(".cloneable").first().find('.cancel').first();
+					var ta = thing.find(".cloneable").first().find('textarea').first();
 					ta.addClass("encrypted");
 					ta.css('background-color','black').css('color','white');
-					var eb = $('<span> <input type="checkbox" checked="checked" />encrypt </span>').insertAfter(thing.find('.cancel').first());
+					var eb = $('<span> <input type="checkbox" checked="checked" />encrypt </span>').insertAfter(cancelB);
+					var inGroups = [];
+					for (var i=0; i<userGroups.length; i++) {
+						var group = userGroups[i];
+						if (group.members.indexOf(author) !== -1 ) {
+							inGroups.push(group);
+						}
+					}
+					var groupsMenu;
+					if (inGroups.length > 0) {
+						groupsMenu = $('<select> <option value="">to us only</option> '+
+							(function(){
+								var list="";
+								for (var i=0; i<inGroups.length; i++) {
+									list += ('<option value="'+inGroups[i].name+'"">@'+inGroups[i].name+'</option>');
+								}
+								return list;
+							})()+
+							'</select>').insertAfter(eb);
+						groupsMenu.css("width","120px");
+					}
 					eb.on('change', function(){
 						if (ta.hasClass("encrypted")) {
-							ta.css('background-color','white').css('color','black');
+							if (groupsMenu) {
+								groupsMenu.attr("disabled","disabled");
+							}
+							ta.css('background-color','inherit').css('color','inherit');
 						} else {
+							if (groupsMenu) {
+								groupsMenu.attr("disabled",null);
+							}
 							ta.css('background-color','black').css('color','white');
 						}
 						ta.toggleClass("encrypted");
 					});
-					var sb = thing.find('.save').first();
+					var sb = thing.find(".cloneable").first().find('.save').first();
 					sb.on('click', function(){
 						var checkbox = $(this).closest('div').find('input').first();
 						if (checkbox.attr('checked')==='checked') {
 							//TODO: If there's a server-side error, restore the plaintext.
 							var plaintext = ta.val();
-							var encryption = encrypt(plaintext, PUBLIC_KEYS[author]);
+							var keys = [];
+							//add our own key to the list...
+							var postingAs = $(".user").first().children().first().text(); //DOES THIS WORK WITH RES? YES!
+							alert("Posting as: "+postingAs);
+							if (PRIVATE_KEYS[postingAs]) {
+								keys.push(PRIVATE_KEYS[postingAs].publicKey);
+							} else {
+								if (!confirm("You won't be able to read this message because you don't have a public/private keypair loaded for /u/"+postingAs+". Continue?")) {
+									return false;
+								}
+							}
+							
+							if (groupsMenu && groupsMenu.val()) {
+								var toGroup;
+								for (var i=0; i<userGroups.length; i++) {
+									if (userGroups[i].name === groupsMenu.val()) {
+										toGroup = userGroups[i];
+										break;
+									}
+								}
+								//This should include the recipient as well.
+								for (var i=0; i<toGroup.members.length; i++) {
+									var memberKey = PUBLIC_KEYS[toGroup.members[i]];
+									if (memberKey && keys.indexOf(memberKey) ===  -1) {
+										keys.push(memberKey);
+									}
+								}
+							} else {
+								keys.push(PUBLIC_KEYS[author]);
+							}
+							var encryption = encrypt(plaintext, keys);
 							if (encryption) {
 								if (encryption.length > 10000) {
-									alert("Error: The encryption would be too long.");
+									//alert("Error: The encryption would be too long.");
 									return false;
 								} else {
 									ta.val(encryption);
-									ta.css('background-color','white').css('color','black');
+									ta.css('background-color','inherit').css('color','inherit');
 									ta.toggleClass("encrypted");
 									checkbox.attr('checked',null);
 									return true;

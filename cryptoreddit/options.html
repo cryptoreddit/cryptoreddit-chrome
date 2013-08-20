@@ -18,6 +18,7 @@
 
 <script src="./js/external/jquery.js" type="text/javascript" charset="utf-8"></script>
 <script src="./js/external/openpgp.min.js" type="text/javascript" charset="utf-8"></script>
+<script src="./js/utilities.js" type="text/javascript" charset="utf-8"></script>
 <script src="./js/options.js" type="text/javascript" charset="utf-8"></script>
 
 </head>
@@ -54,8 +55,8 @@
 <br/>
 <textarea id="importYourPrivateKeytext" placeholder="PRIVATE KEY"></textarea>
 <br/>
-<button id="generateYourButton">generate</button>
-<button id="importYourButton">import</button>
+<button id="generateYourButton">generate and save</button>
+<button id="importYourButton">save</button>
 <br/><br/>
 <table border=1 id="yourKeysTable"></table>
 
@@ -109,6 +110,7 @@
 <textarea id="cleartextMessage" placeholder="the message you want to encrypt"></textarea>
 <br/>
 <button id="encryptButton">encrypt</button>
+<input type="checkbox" id="redditFormatButton" checked="checked" /> conceal overly-long ciphertext
 <br/>
 <textarea id="encryptedMessage" placeholder="The encrypted message will appear here."></textarea>
 

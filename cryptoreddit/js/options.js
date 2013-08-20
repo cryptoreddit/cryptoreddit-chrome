@@ -2,6 +2,7 @@ var othersKeys;
 var yourKeys;
 var userGroups;
 
+
 chrome.storage.local.get('othersKeys', function(x) {
 	if (x.othersKeys && x.othersKeys.length) {
 		othersKeys = x.othersKeys;
@@ -20,7 +21,7 @@ chrome.storage.local.get('othersKeys', function(x) {
 		var viewKeytext = (function(){
 			var kt = entry.keytext;
 			return function(){
-				alert(kt);
+				prompt("Copy the public key below:",kt);
 			};
 		})();
 		var deleteThisKey = (function(){
@@ -64,13 +65,13 @@ chrome.storage.local.get('yourKeys', function(x) {
 		var viewPublicKeytext = (function(){
 			var pbkt = entry.publicKeytext;
 			return function(){
-				alert(pbkt);
+				prompt("Copy your public key below:",pbkt);
 			};
 		})();
 		var viewPrivateKeytext = (function(){
 			var pvkt = entry.privateKeytext;
 			return function(){
-				alert(pvkt);
+				prompt("Copy your private key below. (Don't share it with anyone!)",pvkt);
 			};
 		})();
 		var deleteThisKey = (function(){
@@ -149,9 +150,9 @@ chrome.storage.local.get('userGroups', function(x) {
 			var oldName = group.name;
 			var gi = i;
 			return function(){
-				var newName = prompt("Change group name? Name must be 20 or fewer alphanumeric characters.", oldName);
+				var newName = prompt("Change group name? Name must be 20 or fewer alphanumeric_ characters.", oldName);
 				if (newName && newName != oldName) {
-					if (newName.length <= 20 && /^[0-9a-zA-Z]+$/.test(newName)) {
+					if (newName.length <= 20 && /^[0-9a-zA-Z_]+$/.test(newName)) {
 						if (!(function(list, targetName){
 							for (var m=0; m<list.length; m++) {
 								if (list[m].name == targetName) {
@@ -182,7 +183,7 @@ chrome.storage.local.get('userGroups', function(x) {
 			return function(){
 				var selectionID = parseInt(nr.find('.memberSelector').val());
 				if (selectionID === -1) {
-					var newMemberList = prompt("Enter one or more users to add, separated by single spaces.");
+					var newMemberList = prompt("Enter one or more users to add, separated by single spaces. Usernames are case-sensitive.");
 					if (newMemberList) {
 						var newMembers = newMemberList.split(" ");
 						var membersToAdd = [];
@@ -250,6 +251,12 @@ function importKey() {
 	if (!username || !keytext || username==="" || keytext==="") {
 		return;
 	}
+	try {
+		openpgp.read_publicKey(keytext);
+	} catch(error) {
+		alert("Key is invalid!");
+		return;
+	}
 	var timestamp = new Date().getTime();
 	var source = "";
 	var id=-1;
@@ -273,16 +280,27 @@ function importKey() {
 }
 
 function generate() {
+	var username = $("#importYourUsername").val();
+	if (!username) {
+		alert("You must enter a username!");
+		return;
+	}
 	if (window.crypto.getRandomValues) {
-		var keyPair;
-		openpgp.init();
-		keyPair = openpgp_crypto_generateKeyPair(1,2048);
-		var result1 = openpgp_encoding_armor(4, keyPair.publicKey.string);
-		var result2 = openpgp_encoding_armor(5, keyPair.privateKey.string);
-		result1 = result1.replace("Comment: http://openpgpjs.org", "Comment: /r/cryptoreddit");
-		result2 = result2.replace("Comment: http://openpgpjs.org", "Comment: /r/cryptoreddit");
-		$('#importYourPublicKeytext').val( result1 );
-		$('#importYourPrivateKeytext').val( result2 );
+		$("#generateYourButton").text("this may take a moment...").attr("disabled","disabled");
+			setTimeout(function(){
+			var keyPair;
+			openpgp.init();
+			keyPair = openpgp_crypto_generateKeyPair(1,2048);
+			var result1 = openpgp_encoding_armor(4, keyPair.publicKey.string);
+			var result2 = openpgp_encoding_armor(5, keyPair.privateKey.string);
+			result1 = rewriteComment(result1);
+			result2 = rewriteComment(result2);
+			$('#importYourPublicKeytext').val( result1 );
+			$('#importYourPrivateKeytext').val( result2 );
+			prompt("Press Ctrl+C to copy your public key below, and paste it into comments to start receiving encrypted messages.", result1);
+			alert("And don't forget to back up your private key too!" );
+			$("#importYourButton").click();
+		},10);
 	} else {
 		window.alert("Your browser doesn't support this.");   
 	}
@@ -294,6 +312,13 @@ function importYourKey() {
 	var privateKeytext = $("#importYourPrivateKeytext").val();
 
 	if (!username || !publicKeytext || !privateKeytext || username==="" || publicKeytext==="" || privateKeytext==="" ) {
+		return;
+	}
+	try {
+		openpgp.read_publicKey(publicKeytext);
+		openpgp.read_privateKey(privateKeytext);
+	} catch(error) {
+		alert("Key is invalid!");
 		return;
 	}
 	var timestamp = new Date().getTime();
@@ -321,9 +346,9 @@ function importYourKey() {
 
 // TODO: refactor to avoid repeating this code.
 function createGroup() {
-	var newName = prompt("What should be the name of the new group? Name must be 20 or fewer alphanumeric characters.");
+	var newName = prompt("What should be the name of the new group? Name must be 20 or fewer alphanumeric_ characters.");
 	if (newName) {
-		if (newName.length <= 20 && /^[0-9a-zA-Z]+$/.test(newName)) {
+		if (newName.length <= 20 && /^[0-9a-zA-Z_]+$/.test(newName)) {
 			if (!(function(list, targetName){
 				for (var m=0; m<list.length; m++) {
 					if (list[m].name == targetName) {
@@ -366,26 +391,6 @@ function loadBackup() {
 	}
 }
 
-
-//TODO: Refactor to eliminate repetition
-function encrypt(messageText, listOfPublicKeys) {
-  if (window.crypto.getRandomValues) {
-  	try {
-	    openpgp.init();
-	    var pub_key = openpgp.read_publicKey(listOfPublicKeys[0]);;
-	    for (var i=1; i<listOfPublicKeys.length; i++) {
-	    	pub_key[i] = openpgp.read_publicKey(listOfPublicKeys[i])[0];
-	    }
-	    var result = openpgp.write_encrypted_message(pub_key,messageText);
-	    result = result.replace("Comment: http://openpgpjs.org", "Comment: /r/cryptoreddit");
-	    return result;
-	} catch(error) {
-		return false;
-	}
-  } else {
-    return false; 
-  }
-}
 
 
 function encryptMessage() {
@@ -450,11 +455,10 @@ function encryptMessage() {
 			}
 		}
 
-		var encryption = encrypt(cleartextMessage, listOfPublicKeys);
+		var encryption = encrypt(cleartextMessage, listOfPublicKeys, !$("#redditFormatButton").attr("checked"));
 		if (encryption) {
 			$("#encryptedMessage").val(encryption);
 		} else {
-			alert("Could not encrypt. One or more of the keys may be invalid, or your browser is unsupported.");
 			return;
 		}
 	} else {
