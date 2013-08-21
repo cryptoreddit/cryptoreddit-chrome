@@ -2,17 +2,17 @@
 <head>
 	<title>CryptoReddit - Manage</title>
     <style>
-      body, td, input, button {
+      body, td, input, button, select option {
         font-size:14pt;
       }
       textarea {
-        width:700px;
-        height:100px;
+        width:720px;
+        height:120px;
         font-family: Courier, fixed;
         font-size:14pt;
       }
       input[type="text"] {
-        width:700px;
+        width:720px;
       }
     </style>
 
@@ -56,7 +56,7 @@
 <textarea id="importYourPrivateKeytext" placeholder="PRIVATE KEY"></textarea>
 <br/>
 <button id="generateYourButton">generate and save</button>
-<button id="importYourButton">save</button>
+<button id="importYourButton">import</button>
 <br/><br/>
 <table border=1 id="yourKeysTable"></table>
 
@@ -110,7 +110,12 @@
 <textarea id="cleartextMessage" placeholder="the message you want to encrypt"></textarea>
 <br/>
 <button id="encryptButton">encrypt</button>
-<input type="checkbox" id="redditFormatButton" checked="checked" /> conceal overly-long ciphertext
+<select id="ciphertextFormatSelector">
+	<option value="0">conceal long ciphertext</option>
+	<option value="1">PGP standard format</option>
+	<option value="2">preformat for reddit</option>
+</select>
+<!--<input type="checkbox" id="redditFormatButton" checked="checked" /> conceal overly-long ciphertext -->
 <br/>
 <textarea id="encryptedMessage" placeholder="The encrypted message will appear here."></textarea>
 

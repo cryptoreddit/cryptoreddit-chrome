@@ -15,13 +15,15 @@ chrome.storage.local.get('othersKeys', function(x) {
 			"<tr id='row_"+entry.id+"'>"+
 			"<td><a target='_blank' href='http://www.reddit.com/user/"+entry.username+"'>"+entry.username+"</a></td>"+
 			"<td>"+new Date(entry.timestamp).toUTCString()+"</td>"+
-			"<td><button class='viewButton'>view</button></td>"+
+			"<td><button class='showButton'>show</button></td>"+
 			"<td><button class='deleteButton'>delete</button></td> </tr>");
 		var newRow = $('#row_'+entry.id);
-		var viewKeytext = (function(){
+		var showKeytext = (function(){
+			var un = entry.username;
 			var kt = entry.keytext;
 			return function(){
-				prompt("Copy the public key below:",kt);
+				$("#importUsername").val(un);
+				$("#importKeytext").val(kt);
 			};
 		})();
 		var deleteThisKey = (function(){
@@ -39,10 +41,54 @@ chrome.storage.local.get('othersKeys', function(x) {
 				}
 			}
 		})();
-		newRow.find('.viewButton').on('click',viewKeytext);
+		newRow.find('.showButton').on('click',showKeytext);
 		newRow.find('.deleteButton').on('click',deleteThisKey);
 	}
 });
+
+
+function addKeypairToTable(entry, prepending) {
+	var newRowHTML = "<tr id='yrow_"+entry.id+"'>"+
+		"<td><a target='_blank' href='http://www.reddit.com/user/"+entry.username+"'>"+entry.username+"</a></td>"+
+		"<td>"+new Date(entry.timestamp).toUTCString()+"</td>"+
+		"<td><button class='showYourButton'>show</button></td>"+
+		"<td><button class='deleteButton'>delete</button></td>"+
+		//"<td>"+(entry.source===""?"<button class='publishButton'>publish</button>":"&nbsp;")+"</td>"+
+		"</tr>";
+	if (prepending) {
+		$("#yourKeysTable").prepend(newRowHTML);
+	} else {
+		$("#yourKeysTable").append(newRowHTML);
+	}
+	var newRow = $('#yrow_'+entry.id);
+	var showKeytext = (function(){
+		var un = entry.username;
+		var pbkt = entry.publicKeytext;
+		var pvkt = entry.privateKeytext;
+		return function(){
+			$("#importYourUsername").val(un);
+			$("#importYourPublicKeytext").val(pbkt);
+			$("#importYourPrivateKeytext").val(pvkt);
+		};
+	})();
+	var deleteThisKey = (function(){
+		var eid = entry.id;
+		return function(){
+			if (confirm("Delete this key? You will no longer be able to read messages that have been encrypted to it.")) {
+				for (var j=yourKeys.length-1; j>=0; j--) {
+				    if(yourKeys[j].id == eid) {
+				        yourKeys.splice(j,1);
+				    }
+				}
+				chrome.storage.local.set({'yourKeys': yourKeys}, function() {
+					window.location.reload();
+				});
+			}
+		}
+	})();
+	newRow.find('.showYourButton').on('click',showKeytext);
+	newRow.find('.deleteButton').on('click',deleteThisKey);
+}
 
 chrome.storage.local.get('yourKeys', function(x) {
 	if (x.yourKeys && x.yourKeys.length) {
@@ -52,68 +98,7 @@ chrome.storage.local.get('yourKeys', function(x) {
 	}
 	for (var i=yourKeys.length-1; i>=0; i--) {
 		var entry = yourKeys[i];
-		$("#yourKeysTable").append(
-			"<tr id='yrow_"+entry.id+"'>"+
-			"<td><a target='_blank' href='http://www.reddit.com/user/"+entry.username+"'>"+entry.username+"</a></td>"+
-			"<td>"+new Date(entry.timestamp).toUTCString()+"</td>"+
-			"<td><button class='viewPublicButton'>public</button></td>"+
-			"<td><button class='viewPrivateButton'>private</button></td>"+
-			"<td><button class='deleteButton'>delete</button></td>"+
-			//"<td>"+(entry.source===""?"<button class='publishButton'>publish</button>":"&nbsp;")+"</td>"+
-			"</tr>");
-		var newRow = $('#yrow_'+entry.id);
-		var viewPublicKeytext = (function(){
-			var pbkt = entry.publicKeytext;
-			return function(){
-				prompt("Copy your public key below:",pbkt);
-			};
-		})();
-		var viewPrivateKeytext = (function(){
-			var pvkt = entry.privateKeytext;
-			return function(){
-				prompt("Copy your private key below. (Don't share it with anyone!)",pvkt);
-			};
-		})();
-		var deleteThisKey = (function(){
-			var eid = entry.id;
-			return function(){
-				if (confirm("Delete this key? You will no longer be able to read messages that have been encrypted to it.")) {
-					for (var j=yourKeys.length-1; j>=0; j--) {
-					    if(yourKeys[j].id == eid) {
-					        yourKeys.splice(j,1);
-					    }
-					}
-					chrome.storage.local.set({'yourKeys': yourKeys}, function() {
-						window.location.reload();
-					});
-				}
-			}
-		})();
-		/*var publishThisKey = (function(){
-			var pub = entry.publicKeytext;
-			var usr = entry.username;
-			var eid = entry.id;
-			return function(){
-				if (confirm("Are you logged in to Reddit as /u/"+usr+"? If not, press \"Cancel\", log in, and try again.")) {
-					for (var k=0; k<yourKeys.length; k++) {
-						if (yourKeys[k].id === eid) {
-							yourKeys[k].source = "1";
-							break;
-						}
-					}
-					chrome.storage.local.set({'yourKeys': yourKeys}, function() {
-						window.open("http://www.reddit.com/r/cryptoredditkeys/submit?selftext=true&title=USER%20KEY&text="+encodeURIComponent(pub));
-					});
-				}
-			}
-		})();*/
-		newRow.find('.viewPublicButton').on('click',viewPublicKeytext);
-		newRow.find('.viewPrivateButton').on('click',viewPrivateKeytext);
-		newRow.find('.deleteButton').on('click',deleteThisKey);
-		/*if (entry.source==="") {
-			newRow.find('.publishButton').on('click',publishThisKey);
-		}*/
-
+		addKeypairToTable(entry);
 	}
 });
 
@@ -287,7 +272,7 @@ function generate() {
 	}
 	if (window.crypto.getRandomValues) {
 		$("#generateYourButton").text("this may take a moment...").attr("disabled","disabled");
-			setTimeout(function(){
+		setTimeout(function(){
 			var keyPair;
 			openpgp.init();
 			keyPair = openpgp_crypto_generateKeyPair(1,2048);
@@ -297,16 +282,15 @@ function generate() {
 			result2 = rewriteComment(result2);
 			$('#importYourPublicKeytext').val( result1 );
 			$('#importYourPrivateKeytext').val( result2 );
-			prompt("Press Ctrl+C to copy your public key below, and paste it into comments to start receiving encrypted messages.", result1);
-			alert("And don't forget to back up your private key too!" );
-			$("#importYourButton").click();
+			alert("Copy your public key into a comment to share it. And don't forget to back up your private key too!" );
+			importYourKey(true);
 		},10);
 	} else {
 		window.alert("Your browser doesn't support this.");   
 	}
 }
 
-function importYourKey() {
+function importYourKey(dontReload) {
 	var username = $("#importYourUsername").val();
 	var publicKeytext = $("#importYourPublicKeytext").val();
 	var privateKeytext = $("#importYourPrivateKeytext").val();
@@ -338,9 +322,22 @@ function importYourKey() {
 		source:source,
 		id:id
 	};
+	var publicEntry = {
+		username:username,
+		keytext:publicKeytext,
+		timestamp:timestamp,
+		source:source,
+		id:id
+	};
 	yourKeys.push(entry);
-	chrome.storage.local.set({'yourKeys': yourKeys}, function() {
-		window.location.reload();
+	othersKeys.push(publicEntry);
+	chrome.storage.local.set({'yourKeys': yourKeys, 'othersKeys': othersKeys}, function() {
+		if (dontReload) {
+			addKeypairToTable(entry, true);
+			$("#generateYourButton").text("generate and save").attr("disabled",null);
+		} else {
+			window.location.reload();
+		}
 	});
 }
 
@@ -455,7 +452,11 @@ function encryptMessage() {
 			}
 		}
 
-		var encryption = encrypt(cleartextMessage, listOfPublicKeys, !$("#redditFormatButton").attr("checked"));
+		var ctf = parseInt($("#ciphertextFormatSelector").val());
+		var encryption = encrypt(cleartextMessage, listOfPublicKeys, ctf);
+		if (ctf === 2) {
+			encryption = "    "+encryption.replace(/\n/g,"\n    ");
+		}
 		if (encryption) {
 			$("#encryptedMessage").val(encryption);
 		} else {

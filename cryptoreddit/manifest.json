@@ -1,6 +1,6 @@
 {
     "name": "CryptoReddit",
-    "version": "0.2",
+    "version": "0.22",
 
     "options_page": "options.html",
     "update_url": "http://raw.github.com/cryptoreddit/cryptoreddit-chrome/master/updates.xml",
