@@ -101,8 +101,11 @@ function decryptElement(element) {
 	if (element.html().indexOf("//#__") !== -1) {
 		ciphertext = element.html().replace(/_/g,"\n");
 	}
+	//TODO: Find a more permanent fix for this. Might be a bug in openpgpjs, or with us.
+	ciphertext = ciphertext.replace("\n\n","_").replace(/\n\n/g, "\n").replace("_","\n\n");
 	var decryption;
 	var private_key_usernames = Object.keys(PRIVATE_KEYS);
+	console.log("AFTER:", ciphertext);
 	for (var i=0; i<private_key_usernames.length; i++) {
 		decryption = decrypt(ciphertext, PRIVATE_KEYS[private_key_usernames[i]].privateKey);
 		if (decryption) {break;}
@@ -177,7 +180,7 @@ var mainFunction = function() {
     });
 
     //Optionally encrypt messages to people whose keys we know.
-	$(".tagline").find(".author").each(function(){
+	$(".author").each(function(){
 		var author = $(this).text();
 		if (PUBLIC_KEYS[author]) {
 			$(this).css("background-color","black").css("color","yellow").css("padding","3px");
