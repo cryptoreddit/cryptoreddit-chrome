@@ -4,13 +4,19 @@ var othersKeys;
 var userGroups;
 
 // Load stuff from memory, one by one
-chrome.storage.local.get('userGroups', function(w) {
-	if (w.userGroups && w.userGroups.length) {
-		userGroups = w.userGroups;
-	} else {
-		userGroups = [];
-	}
+getUserGroups();
+function getUserGroups() {
+	chrome.storage.local.get('userGroups', function(w) {
+		if (w.userGroups && w.userGroups.length) {
+			userGroups = w.userGroups;
+		} else {
+			userGroups = [];
+		}
+		getYourKeys();
+	});
+}
 
+function getYourKeys() {
 	chrome.storage.local.get('yourKeys', function(x) {
 		var yourKeys;
 		if (x.yourKeys && x.yourKeys.length) {
@@ -18,42 +24,45 @@ chrome.storage.local.get('userGroups', function(w) {
 		} else {
 			yourKeys = [];
 		}
-		for (var i=0; i<yourKeys.length; i++) {
-			PRIVATE_KEYS[yourKeys[i].username] = {privateKey:yourKeys[i].privateKeytext, publicKey:yourKeys[i].publicKeytext};
-		}
 
-		chrome.storage.local.get('othersKeys', function(y) {
-			//var othersKeys;
-			if (y.othersKeys && y.othersKeys.length) {
-				othersKeys = y.othersKeys;
-			} else {
-				othersKeys = [];
-			}
-			for (var i=othersKeys.length-1; i>=0; i--) {
-				if (!PUBLIC_KEYS[othersKeys[i].username]) {
-					try {
-						openpgp.read_publicKey(othersKeys[i].keytext);
-						PUBLIC_KEYS[othersKeys[i].username] = othersKeys[i].keytext;
-					} catch(error) {
-						console.log("Could not import invalid key for /u/"+othersKeys[i].username);
-					}				
-				}
-			}
-			mainFunction();
+		_.each(yourKeys, function(key) {
+			PRIVATE_KEYS[key.username] = {
+				privateKey: key.privateKeytext, 
+				publicKey: key.publicKeytext
+			};	
 		});
 	});
-});
+	getOthersKeys();
+}
 
+function getOthersKeys() {
+	chrome.storage.local.get('othersKeys', function(y) {
+		if (y.othersKeys && y.othersKeys.length) {
+			othersKeys = y.othersKeys;
+		} else {
+			othersKeys = [];
+		}
 
+		function importKey(key) {
+			try {
+				openpgp.read_publicKey(key.keytext);
+				PUBLIC_KEYS[key.username] = key.keytext;
+			} catch(error) {
+				console.log("Could not import invalid key for /u/" + key.username);
+			}
+		}
 
+		_.each(othersKeys, importKey);
 
+		mainFunction();
+	});
+}
 
 
 
 
 function decrypt(messageText, privateKey) {
   if (window.crypto.getRandomValues) {
-    //openpgp.init();
     var priv_key = openpgp.read_privateKey(privateKey);
     var msg = openpgp.read_message(messageText);
 
@@ -96,6 +105,7 @@ function decrypt(messageText, privateKey) {
 }
 
 
+
 function decryptElement(element) {
 	var ciphertext = element.text();
 	if (element.html().indexOf("//#__") !== -1) {
@@ -105,7 +115,6 @@ function decryptElement(element) {
 	ciphertext = ciphertext.replace("\n\n","_").replace(/\n\n/g, "\n").replace("_","\n\n");
 	var decryption;
 	var private_key_usernames = Object.keys(PRIVATE_KEYS);
-	console.log("AFTER:", ciphertext);
 	for (var i=0; i<private_key_usernames.length; i++) {
 		decryption = decrypt(ciphertext, PRIVATE_KEYS[private_key_usernames[i]].privateKey);
 		if (decryption) {break;}
@@ -124,6 +133,43 @@ function decryptElement(element) {
 	}
 }
 
+
+function distinguishPublicKeyElement(element) {
+	var username = element.closest("form").parent().find(".author").first().text();
+	if (!PUBLIC_KEYS[username]) {
+	    try {
+			openpgp.read_publicKey(element.text());
+			element.addClass("newpublickey");
+			element.css('color','magenta');
+    		element.css('cursor','pointer');
+    		element.on('click', function(){
+    			if (confirm("Import this key for user " + username + "?")) {
+    				PUBLIC_KEYS[username] = element.text();
+    				addPublicKeyForUser(username, element.text(), (function() {
+    					var el = element;
+    					return function(){
+    						undistinguishPublicKeyElement(el);
+    					};
+    				})());
+    			}
+    		});
+		} catch(error) {
+			console.log("couldn't read", element.text(), error);
+			return;
+		}
+	}
+}
+
+function undistinguishPublicKeyElement(element) {
+	alert("Key imported! Reload to start sending encrypted messages to this user.");
+	element.css('color','inherit');
+	element.css('cursor','inherit');
+	element.unbind('click');
+	//TODO: distinguish this user as encryptable.
+}
+
+
+
 var mainFunction = function() {
 	
     $('div.md').each(function(){
@@ -131,51 +177,7 @@ var mainFunction = function() {
     		//Decrypt all messages whose keys we know.
     		decryptElement($(this));
     	} else if ($(this).text().indexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----") === 0) {
-    		//Distinguish public keys we don't have yet.
-    		var username = $(this).closest("form").parent().find(".author").first().text();
-    		if (!PUBLIC_KEYS[username]) {
-			    try {
-					openpgp.read_publicKey($(this).text());
-	    			$(this).addClass("newpublickey");
-	    			$(this).css('color','magenta');
-		    		$(this).css('cursor','pointer');
-		    		$(this).on('click', function(){
-		    			if (confirm("Import this key for user "+username + "?")) {
-		    				PUBLIC_KEYS[username] = $(this).text();
-		    				//TODO: refactor to avoid repeating this code
-
-							var timestamp = new Date().getTime();
-							var source = "";
-							var id=-1;
-							for (var i=0; i<othersKeys.length; i++) {
-								if (id < othersKeys[i].id) {
-									id = othersKeys[i].id;
-								}
-							}
-							id = id+1;
-							var entry = {
-								username:username,
-								keytext:$(this).text(),
-								timestamp:timestamp,
-								source:source,
-								id:id
-							};
-							othersKeys.push(entry);
-							var keyDiv = $(this);
-							chrome.storage.local.set({'othersKeys': othersKeys}, function() {
-								alert("Key imported! Reload to start sending encrypted messages to this user.");
-				    			keyDiv.css('color','inherit');
-					    		keyDiv.css('cursor','inherit');
-					    		keyDiv.unbind('click');
-					    		//TODO: distinguish this user as encryptable.
-							});
-		    			}
-		    		});
-	    		} catch(error) {
-					console.log("couldnt read", $(this).text(), error);
-					return;
-				}
-    		}
+    		distinguishPublicKeyElement($(this));
     	}
     });
 

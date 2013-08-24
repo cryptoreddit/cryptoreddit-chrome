@@ -46,3 +46,24 @@ function encrypt(messageText, listOfPublicKeys, dontShorten) {
     return false; 
   }
 }
+
+
+
+function addPublicKeyForUser(username, keytext, callback) {
+	var id = -1;
+	_.each(othersKeys, function(key){
+		if (id < key.id) {
+			id = key.id;
+		}
+	});
+	id++;
+	var entry = {
+		username: username,
+		keytext: keytext,
+		timestamp: new Date().getTime(),
+		source: "",
+		id: id
+	};
+	othersKeys.push(entry);
+	chrome.storage.local.set({'othersKeys': othersKeys}, callback);
+}

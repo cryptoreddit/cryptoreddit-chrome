@@ -242,26 +242,9 @@ function importKey() {
 		alert("Key is invalid!");
 		return;
 	}
-	var timestamp = new Date().getTime();
-	var source = "";
-	var id=-1;
-	for (var i=0; i<othersKeys.length; i++) {
-		if (id < othersKeys[i].id) {
-			id = othersKeys[i].id;
-		}
-	}
-	id = id+1;
-	var entry = {
-		username:username,
-		keytext:keytext,
-		timestamp:timestamp,
-		source:source,
-		id:id
-	};
-	othersKeys.push(entry);
-	chrome.storage.local.set({'othersKeys': othersKeys}, function() {
-		window.location.reload();
-	});
+
+	addPublicKeyForUser(username, keytext, function(){window.location.reload();});
+
 }
 
 function generate() {
