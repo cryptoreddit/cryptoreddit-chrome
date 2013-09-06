@@ -64,7 +64,12 @@ function getOthersKeys() {
 function decrypt(messageText, privateKey) {
   if (window.crypto.getRandomValues) {
     var priv_key = openpgp.read_privateKey(privateKey);
-    var msg = openpgp.read_message(messageText);
+    var msg;
+    try {
+    	msg = openpgp.read_message(messageText);
+    } catch (error) {
+    	return false;
+    }
 
     var keymat = null;
     var sesskey = null;
@@ -174,7 +179,6 @@ var mainFunction = function() {
 	
     $('div.md').each(function(){
     	if ( $(this).text().indexOf("-----BEGIN PGP MESSAGE-----") === 0 ) {
-    		//Decrypt all messages whose keys we know.
     		decryptElement($(this));
     	} else if ($(this).text().indexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----") === 0) {
     		distinguishPublicKeyElement($(this));
