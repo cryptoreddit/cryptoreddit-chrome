@@ -599,7 +599,7 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 								var thingsNowOnPage = $(".sitetable").find(".thing");
 								if (thingsNowOnPage.length > numberOfThings) {
 									console.log("New thing detected!");
-
+									clearInterval(newThingListener);
 									thingsNowOnPage.each(function(){
 										thisThingClassSelector = ("."+$(this).attr("class").replace(/ /g, ".")).replace("..",".");
 										thisThingClassSelector = thisThingClassSelector.slice(0, thisThingClassSelector.length-1);
@@ -607,7 +607,10 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 										if (thingsOnPage.filter(thisThingClassSelector).length === 0) {
 											// do something with $(this).find(".noncollapsed").find("form").first()
 											var newElement = $(thisThingClassSelector).find(".noncollapsed");
-											//console.log("##", thisThingClassSelector);
+											if (newElement.length === 0) {
+												return;
+											}
+											console.log("##", thisThingClassSelector);
 											//console.log("######", newForm, newForm.length);
 											decryptElement(newElement.find("div.md"));
 
@@ -674,7 +677,7 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 
 										}
 									});
-									clearInterval(newThingListener);
+									
 									
 								}
 								
