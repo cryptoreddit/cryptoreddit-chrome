@@ -49,7 +49,7 @@ chrome.storage.local.get('othersKeys', function(x) {
 
 function addKeypairToTable(entry, prepending) {
 	var newRowHTML = "<tr id='yrow_"+entry.id+"'>"+
-		"<td><a target='_blank' href='http://www.reddit.com/user/"+entry.username+"'>"+entry.username+"</a></td>"+
+		"<td><a target='_blank' href='http://www.reddit.com/"+(entry.username.charAt(0)==="/" ? "r" : "user/")+entry.username+"'>"+entry.username+"</a></td>"+
 		"<td>"+new Date(entry.timestamp).toUTCString()+"</td>"+
 		"<td><button class='showYourButton'>show</button></td>"+
 		"<td><button class='deleteButton'>delete</button></td>"+
@@ -261,11 +261,19 @@ function generate() {
 			keyPair = openpgp_crypto_generateKeyPair(1,2048);
 			var result1 = openpgp_encoding_armor(4, keyPair.publicKey.string);
 			var result2 = openpgp_encoding_armor(5, keyPair.privateKey.string);
-			result1 = rewriteComment(result1);
-			result2 = rewriteComment(result2);
+			var sr;
+			if (username.charAt(0) === "/") {
+				sr = username;
+			}
+			result1 = rewriteComment(result1, false, sr);
+			result2 = rewriteComment(result2, false, sr);
 			$('#importYourPublicKeytext').val( result1 );
 			$('#importYourPrivateKeytext').val( result2 );
-			alert("Copy your public key into a comment to share it. And don't forget to back up your private key too!" );
+			if (sr) {
+				alert("You just generated a subreddit keypair, whose private key you can share. But never share it in any unencrypted message!");
+			} else {
+				alert("Copy your public key into a comment to share it. And don't forget to back up your private key too!" );
+			}
 			importYourKey(true);
 		},10);
 	} else {
@@ -305,16 +313,9 @@ function importYourKey(dontReload) {
 		source:source,
 		id:id
 	};
-	var publicEntry = {
-		username:username,
-		keytext:publicKeytext,
-		timestamp:timestamp,
-		source:source,
-		id:id
-	};
+
 	yourKeys.push(entry);
-	othersKeys.push(publicEntry);
-	chrome.storage.local.set({'yourKeys': yourKeys, 'othersKeys': othersKeys}, function() {
+	chrome.storage.local.set({'yourKeys': yourKeys}, function() {
 		if (dontReload) {
 			addKeypairToTable(entry, true);
 			$("#generateYourButton").text("generate and save").attr("disabled",null);
@@ -426,19 +427,30 @@ function encryptMessage() {
 		for (var i=0; i<inclusions.length; i++) {
 			var includee = inclusions[i];
 			if (exclusions.indexOf(includee) === -1) {
+				var added = false;
 				for (var j=othersKeys.length-1; j>=0; j--) {
 					if (othersKeys[j].username === includee) {
-						listOfPublicKeys.push(othersKeys[j].keytext);
+						listOfPublicKeys.push(openpgp.read_publicKey(othersKeys[j].keytext));
+						added = true;
 						break;
 					}
 				}
+				if (!added) {
+					for (var j=yourKeys.length-1; j>=0; j--) {
+						if (yourKeys[j].username === includee) {
+							listOfPublicKeys.push(openpgp.read_publicKey(yourKeys[j].publicKeytext));
+							break;
+						}
+					}
+				}
+
 			}
 		}
 
 		var ctf = parseInt($("#ciphertextFormatSelector").val());
 		var encryption = encrypt(cleartextMessage, listOfPublicKeys, ctf);
 		if (ctf === 2) {
-			encryption = "    "+encryption.replace(/\n/g,"\n    ");
+			encryption = "\t"+encryption.replace(/\n/g,"\n\t");
 		}
 		if (encryption) {
 			$("#encryptedMessage").val(encryption);

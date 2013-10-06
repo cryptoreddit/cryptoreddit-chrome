@@ -1,12 +1,12 @@
 openpgp.init();
 
 
-function rewriteComment(message, shorten) {
+function rewriteComment(message, shorten, sr) {
 	var versionNumber = "";
 	if (typeof ( chrome.runtime.getManifest ) == 'function') {
 		versionNumber = chrome.runtime.getManifest().version;
 	}
-	message = message.replace("Comment: http://openpgpjs.org", "Comment: /r/cryptoreddit")
+	message = message.replace("Comment: http://openpgpjs.org", "Comment: /r" + (sr || "/cryptoreddit"));
 	message = message.replace("Version: OpenPGP.js v.1.20130712","Version: CryptoReddit "+versionNumber);
 	//Conceal overly long messages:
 	if (shorten && message.length > 1000) {
@@ -29,9 +29,9 @@ function encrypt(messageText, listOfPublicKeys, dontShorten) {
   if (window.crypto.getRandomValues) {
   	try {
 	    openpgp.init();
-	    var pub_key = openpgp.read_publicKey(listOfPublicKeys[0]);
+	    var pub_key = listOfPublicKeys[0];
 	    for (var i=1; i<listOfPublicKeys.length; i++) {
-	    	pub_key[i] = openpgp.read_publicKey(listOfPublicKeys[i])[0];
+	    	pub_key[i] = listOfPublicKeys[i][0];
 	    }
 	    var result = openpgp.write_encrypted_message(pub_key,messageText);
 	    result = rewriteComment(result, shorten);

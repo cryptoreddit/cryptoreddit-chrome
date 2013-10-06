@@ -1,6 +1,6 @@
 {
     "name": "CryptoReddit",
-    "version": "0.24",
+    "version": "0.249",
 
     "options_page": "options.html",
     "update_url": "http://raw.github.com/cryptoreddit/cryptoreddit-chrome/master/updates.xml",
@@ -14,6 +14,7 @@
                     "/js/external/jquery.js", 
                     "/js/external/openpgp.min.js",
                     "/js/external/underscore.min.js",
+                    "/js/external/snuownd.js",
                     "/js/utilities.js",
                     "/js/content_script.js"
                 ]
