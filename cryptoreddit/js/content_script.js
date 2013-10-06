@@ -589,33 +589,33 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 
 					//Apply transformations to that thing and stop listening.
 
-					var thingsOnPage = $(".sitetable.nestedlisting").find(".thing");
+					var thingsOnPage = $(".sitetable").find(".thing");
 					var numberOfThings = thingsOnPage.length;
 					var newThingListener = setInterval((function(){
-						var child = form.closest(".child");
-						if (true || child.length === 0) {
+						//var child = form.closest(".child");
+						if (true) {
 							return function(){
-								//console.log("Checking for new thing");
-								var thingsNowOnPage = $(".sitetable.nestedlisting").find(".thing");
+								console.log("Checking for new thing");
+								var thingsNowOnPage = $(".sitetable").find(".thing");
 								if (thingsNowOnPage.length > numberOfThings) {
-									//console.log("New thing detected!");
+									console.log("New thing detected!");
 
 									thingsNowOnPage.each(function(){
-										thisThingClassSelector = "."+$(this).attr("class").replace(/ /g, ".");
+										thisThingClassSelector = ("."+$(this).attr("class").replace(/ /g, ".")).replace("..",".");
 										thisThingClassSelector = thisThingClassSelector.slice(0, thisThingClassSelector.length-1);
 										// Is this thing a new one?
 										if (thingsOnPage.filter(thisThingClassSelector).length === 0) {
 											// do something with $(this).find(".noncollapsed").find("form").first()
-											var newForm = $(thisThingClassSelector).find(".noncollapsed").find("form").first();
+											var newElement = $(thisThingClassSelector).find(".noncollapsed");
 											//console.log("##", thisThingClassSelector);
 											//console.log("######", newForm, newForm.length);
-											decryptElement(newForm.find("div.md"));
+											decryptElement(newElement.find("div.md"));
 
 
 			//begin WET code
 			var modmailIsEncryptable = false;
 			var modmailSubreddit = 
-				newForm.closest(".message-parent")
+				newElement.closest(".message-parent")
 				.find("span.correspondent.reddit")
 				.find("a").first().text();
 
@@ -623,7 +623,7 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 			if (PUBLIC_KEYS[modmailSubreddit.slice(2)]) {
 				modmailIsEncryptable = true;
 			}
-			var authorElement = newForm.closest(".noncollapsed").find(".author").first();
+			var authorElement = newElement.find(".author").first();
 			var author;
 			if (authorElement.length > 0) {
 				author = authorElement.text();
@@ -636,7 +636,7 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 				//console.log("Distinguishing:", authorElement);
 				authorElement.css("background-color","black").css("color","yellow").css("padding","3px");
 				authorElement.addClass("encryptable");
-				var rrb = newForm.closest(".noncollapsed").find(".buttons").find("a:contains('reply')").first();
+				var rrb = newElement.find(".buttons").find("a:contains('reply')").first();
 				//I think that actually still works.
 				if (rrb.length === 1) {				
 					rrb.on('click',function() {
@@ -652,7 +652,7 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 					});
 				}
 			} else if (subredditIsEncryptable || modmailIsEncryptable) { //TODO: refactor to avoid duplication
-				var rrb = newForm.closest(".noncollapsed").find(".buttons").find("a:contains('reply')").first();
+				var rrb = newElement.find(".buttons").find("a:contains('reply')").first();
 				if (rrb.length === 1) {				
 					rrb.on('click',function() {
 						if (!$(this).attr('alreadyclicked')) {
