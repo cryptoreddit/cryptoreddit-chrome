@@ -17,7 +17,7 @@
     </style>
 
 <script src="./js/external/jquery.js" type="text/javascript" charset="utf-8"></script>
-<script src="./js/external/openpgp.min.js" type="text/javascript" charset="utf-8"></script>
+<script src="./js/external/openpgp.js" type="text/javascript" charset="utf-8"></script>
 <script src="./js/external/underscore.min.js" type="text/javascript" charset="utf-8"></script>
 <script src="./js/utilities.js" type="text/javascript" charset="utf-8"></script>
 <script src="./js/options.js" type="text/javascript" charset="utf-8"></script>
@@ -32,6 +32,8 @@
   <li><a href="#manageusergroups">Manage user groups</a></li>
   <li><a href="#backupeverything">Back up everything</a></li>
   <li><a href="#encryptiontool">Encryption tool</a></li>
+  <li><a href="#messagecache">Message cache</a></li>
+
 </ul>
 
 <hr/>
@@ -93,8 +95,7 @@
 
 <ul>
   <li>List one or more recipients below, separated by single spaces.
-    <ul><li>Don't forget to include yourself!</li>
-    <li>Make sure your own public key is listed under "Other's keys".</li></ul>
+    <ul><li>Don't forget to include yourself!</li></ul>
   </li>
   <li>Usernames are case-sensitive.</li>
   <li>Leave blank to use the entire "Others' keys" list.</li>
@@ -120,6 +121,15 @@
 <br/>
 <textarea id="encryptedMessage" placeholder="The encrypted message will appear here."></textarea>
 
+<hr/>
+<h1><a name="messagecache">Message cache</a></h1>
+
+<p>Decrypted messages are cached in order to reduce load times. They are deleted after not being accessed for some time.</p>
+
+<ul>
+  <li>Minutes to cache messages: <input type="text" id="cacheTime" style="width:80px;" value="1440"/> <button id="setCacheTimeButton">set</button></li>
+  <li>Total cached messages: <b id="cacheCount">123</b> <button id="clearCacheButton">clear</button></li>
+</ul>
 
 
 <br/><br/>

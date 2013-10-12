@@ -1,7 +1,7 @@
 var othersKeys;
 var yourKeys;
 var userGroups;
-
+var messageCache;
 
 chrome.storage.local.get('othersKeys', function(x) {
 	if (x.othersKeys && x.othersKeys.length) {
@@ -216,6 +216,38 @@ chrome.storage.local.get('userGroups', function(x) {
 
 	}
 });
+
+
+chrome.storage.local.get('messageCache', function(z) {
+	if (z.messageCache && Object.keys(z.messageCache).length) {
+		messageCache = z.messageCache;
+	} else {
+		messageCache = {"-1": 1440};
+	}
+	$("#cacheTime").val(messageCache[-1]);
+	$("#cacheCount").text(Object.keys(messageCache).length-1);
+	$("#setCacheTimeButton").on('click', setCacheTime);
+	$("#clearCacheButton").on('click', clearCache);
+	//console.log(messageCache);
+});
+
+
+function setCacheTime() {
+	messageCache[-1] = parseInt($("#cacheTime").val());
+	chrome.storage.local.set({'messageCache': messageCache}, function() {
+		window.location.reload();
+	});
+}
+
+function clearCache() {
+	if (confirm("Clear the message cache?")) {
+		messageCache = {"-1": messageCache[-1]};
+		chrome.storage.local.set({'messageCache': messageCache}, function() {
+			window.location.reload();
+		});
+	}
+}
+
 
 
 

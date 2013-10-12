@@ -3,11 +3,14 @@ var PUBLIC_KEYS = {};
 var othersKeys;
 var yourKeys;
 var userGroups;
+var messageCache;
 
 var parser = SnuOwnd.getParser();
 
 var slashSubreddit = "/"+window.location.pathname.split("/")[2];
 var subredditIsEncryptable = false;
+var postingAs = $(".user").first().children().first().text();
+var resIsEnabled = !!$("#RESConsole").length;
 
 // Load stuff from memory, one by one
 getUserGroups();
@@ -68,8 +71,38 @@ function getOthersKeys() {
 
 		_.each(othersKeys, importKey);
 
+		getMessageCache();
+	});
+}
+
+
+function getMessageCache() {
+	chrome.storage.local.get('messageCache', function(z) {
+		if (z.messageCache && Object.keys(z.messageCache).length) {
+			messageCache = z.messageCache;
+		} else {
+			messageCache = {"-1": 1440};
+		}
+		// Uncache messages that haven't been accessed in a certain amount of time.
+		var currentTime = (new Date()).getTime();
+		var cacheTimeMilliseconds = messageCache[-1]*60*1000;
+		//console.log("MC", messageCache);
+		//console.log("CT", cacheTimeMilliseconds)
+		for (var hashKey in messageCache) {
+			if (parseInt(hashKey) >= 0) {
+				var timeSince = currentTime - messageCache[hashKey].lastAccessed;
+				//console.log("TIME SINCE:", timeSince);
+				if (timeSince > cacheTimeMilliseconds) {
+					delete messageCache[hashKey];
+				}
+			}
+		}
 		mainFunction();
 	});
+}
+
+function hashCode(s) {
+  return Math.abs(s.split("").reduce(function(a,b){a=((a<<5)-a)+b.charCodeAt(0);return a&a},0));              
 }
 
 
@@ -123,10 +156,6 @@ function decrypt(messageText, privateKey) {
       }
     }
     if (keymat != null) {
-      /*if (!keymat.keymaterial.decryptSecretMPIs($('#decpassword').val())) {
-        alert("Password for secret key was incorrect!");
-        return;
-      }*/
       try {
       	return [msg[0].decrypt(keymat, sesskey), recipientNames];
       } catch(error) {
@@ -141,6 +170,48 @@ function decrypt(messageText, privateKey) {
     return [false, []]; 
   }
 }
+
+
+function attemptToDecrypt(ciphertext, callback) {
+	//console.log("MC", messageCache);
+	var hashKey = hashCode(ciphertext);
+	if (messageCache[hashKey] && messageCache[hashKey].plaintext) {
+		console.log("Cache hit");
+		messageCache[hashKey].lastAccessed = (new Date()).getTime();
+		chrome.storage.local.set({'messageCache': messageCache});
+		callback();
+	} else {
+		console.log("Cache miss");
+		var plaintext = false;
+		var recipients = "(unknown)";
+		var private_key_usernames = Object.keys(PRIVATE_KEYS);
+		for (var i=0; i<private_key_usernames.length; i++) {
+			var res = decrypt(ciphertext, PRIVATE_KEYS[private_key_usernames[i]].privateKey);
+			plaintext = res[0];
+			recipients = res[1];
+			if (plaintext) {
+				break;
+			}
+		}
+		//console.log("LOL!!!");
+		var recipientsString = analyzeRecipients(recipients);
+		messageCache[hashKey] = {
+			ciphertext: ciphertext,
+			plaintext: plaintext,
+			lastAccessed: (new Date()).getTime(),
+			recipientsString: recipientsString
+		}
+		//var ii = Math.random();
+		//console.log("WRITING:", ii, messageCache);
+		chrome.storage.local.set({'messageCache': messageCache}, callback);
+	}
+}
+/* {
+	plaintext = "hello",
+	lastAccessed = someTime,
+	recipientsString = "@group1 user1 !user2"
+}*/
+
 
 
 //Given a list of usernames, find the most concise representation
@@ -189,6 +260,134 @@ function analyzeRecipients(recipientNames) {
 }
 
 
+// Create IE + others compatible event handler
+var eventMethod = window.addEventListener ? "addEventListener" : "attachEvent";
+var eventer = window[eventMethod];
+var messageEvent = eventMethod == "attachEvent" ? "onmessage" : "message";
+// Listen to message from child window
+eventer(messageEvent,function(e) {
+	var eventOriginator = $("iframe[src='"+e.data.src+"']");
+	if (e.data.height) {
+		eventOriginator.height(e.data.height+15);
+	}
+	if (typeof e.data.ciphertext !== "undefined") {
+		//console.log("GOT ciphertext", e.data.ciphertext);
+		eventOriginator.prev("textarea").val(e.data.ciphertext).css("display","block");
+		eventOriginator.css("display","none");
+		var form = eventOriginator.closest("form");
+		var eb = form.find(".encryptbox input");
+		var sb = form.find('.save').first();
+		var gm = form.find(".encryptselector");
+		gm.attr("disabled","disabled");
+		eb.attr('checked',null);
+		sb.unbind('click').click();
+
+
+					//Apply transformations to that thing and stop listening.
+
+					var thingsOnPage = $(".sitetable").find(".thing");
+					var numberOfThings = thingsOnPage.length;
+					var newThingListener = setInterval((function(){
+						return function(){
+							console.log("Checking for new thing");
+							var thingsNowOnPage = $(".sitetable").find(".thing");
+							if (thingsNowOnPage.length > numberOfThings) {
+								console.log("New thing detected!");
+								clearInterval(newThingListener);
+								thingsNowOnPage.each(function(){
+									thisThingClassSelector = ("."+$(this).attr("class").replace(/ /g, ".")).replace("..",".");
+									thisThingClassSelector = thisThingClassSelector.slice(0, thisThingClassSelector.length-1);
+									// Is this thing a new one?
+									if (thingsOnPage.filter(thisThingClassSelector).length === 0) {
+										// do something with $(this).find(".noncollapsed").find("form").first()
+										var newElement = $(thisThingClassSelector).find(".noncollapsed");
+										if (newElement.length === 0) {
+											return;
+										}
+										console.log("##", thisThingClassSelector);
+										//console.log("######", newForm, newForm.length);
+										var npt = newElement.closest('.thing').parent().closest('.thing');//.find("noncollapsed").first();
+										npt.find("a[alreadyclicked='yes']").attr("alreadyclicked",null);
+										decryptElement(newElement.find("div.md"));
+
+
+		//begin WET code
+		var modmailIsEncryptable = false;
+		var modmailSubreddit = 
+			newElement.closest(".message-parent")
+			.find("span.correspondent.reddit")
+			.find("a").first().text();
+
+		//console.log("WE've identified the modmail subreddit as:", modmailSubreddit);
+		if (PUBLIC_KEYS[modmailSubreddit.slice(2)]) {
+			modmailIsEncryptable = true;
+		}
+		var authorElement = newElement.find(".author").first();
+		var author;
+		if (authorElement.length > 0) {
+			author = authorElement.text();
+		} else {
+			//It must be a modmail message from myself.
+			author = $(".user").first().children().first().text(); //TODO: make that a global variable
+		}
+		//console.log("NEW COMMENT AUTHOR", author, PUBLIC_KEYS[author]);
+		if (PUBLIC_KEYS[author]) {
+			//console.log("Distinguishing:", authorElement);
+			authorElement.css("background-color","black").css("color","yellow").css("padding","3px");
+			authorElement.addClass("encryptable");
+			var rrb = newElement.find(".buttons").find("a:contains('reply')").first();
+			//I think that actually still works.
+			if (rrb.length === 1) {				
+				rrb.on('click',function() {
+					if (!$(this).attr('alreadyclicked')) {
+						$(this).attr("alreadyclicked","yes");
+						var thing = $(this).closest('.thing');
+						var form = thing.find(".cloneable").first();
+						if (topFormIsEncryptable) {
+							removeEncryptionOptions(form);
+						}
+						addEncryptionOptions(form, author, modmailSubreddit);
+					}
+				});
+			}
+		} else if (subredditIsEncryptable || modmailIsEncryptable) { //TODO: refactor to avoid duplication
+			var rrb = newElement.find(".buttons").find("a:contains('reply')").first();
+			if (rrb.length === 1) {				
+				rrb.on('click',function() {
+					if (!$(this).attr('alreadyclicked')) {
+						$(this).attr("alreadyclicked","yes");
+						var thing = $(this).closest('.thing');
+						var form = thing.find(".cloneable").first();
+						if (topFormIsEncryptable) {
+							removeEncryptionOptions(form);
+						}
+						addEncryptionOptions(form, author, modmailSubreddit);
+					}
+				});
+			}
+		}
+		//end WET code
+
+
+
+
+									}
+								});
+								
+								
+							}
+							
+						};
+						
+
+
+					})(), 100);
+
+
+
+	}
+},false);
+
 
 function decryptElement(element) {
 	var wholeHtml = element.html();
@@ -213,7 +412,27 @@ function decryptElement(element) {
 		} //Phase this out?
 		//TODO: Find a more permanent fix for this. Might be a bug in openpgpjs, or with us.
 		ciphertext = ciphertext.replace("\n\n","_").replace(/\n\n/g, "\n").replace("_","\n\n").replace(/<p>/g,"");
-		var decryption;
+
+		attemptToDecrypt(ciphertext, function() {
+			var iframeSrc = "chrome-extension://"+chrome.runtime.id+"/decryptor.html?m="+hashCode(ciphertext);
+			//console.log("INSERTING IFRAME:", iframeSrc)
+
+			var unenhancedHtml = element.html().replace(/ class="imgScanned"/g,'');
+			//hackish...
+			if (unenhancedHtml.indexOf(originalCiphertext) ===-1) {
+				console.log("Could not find:", originalCiphertext, "in:", unenhancedHtml);
+			}
+			element.html( unenhancedHtml.replace(originalCiphertext,
+				"<iframe scrolling='no' frameborder='0' style='"+
+				"overflow:hidden;"+
+				"border:none;"+
+				"width:100%; height:10px"+
+				"' src='"+iframeSrc+"'></iframe>"
+			));
+		});
+
+
+		/*var decryption;
 		var recipientNames;
 		var private_key_usernames = Object.keys(PRIVATE_KEYS);
 		for (var i=0; i<private_key_usernames.length; i++) {
@@ -226,12 +445,26 @@ function decryptElement(element) {
 		}
 		var hoverText = analyzeRecipients(recipientNames);
 		if (decryption) {
-			wholeHtml = wholeHtml.replace(originalCiphertext, "<div class='encrypted' title='"+hoverText+"'>"+parser.render(decryption)+"</div>")
+			wholeHtml = wholeHtml.replace(originalCiphertext, "<div class='encrypted' title='"+hoverText+"'>"+escape(ciphertext)+"</div>")
 		} else {
 			wholeHtml = wholeHtml.replace(originalCiphertext, "<div class='undecryptable' title='"+hoverText+"'>"+ciphertext+"</div>")
-		}
+		}*/
+
+		//TODO: decrypt here, and add to cache.
+		//Have the iframe just load the plaintext from memory.
+		/*var iframeSrc = "chrome-extension://"+chrome.runtime.id+"/decryptor.html?"+escape(ciphertext);
+		wholeHtml = wholeHtml.replace(originalCiphertext,
+			"<iframe scrolling='no' frameborder='0' style='"+
+			"overflow:hidden;"+
+			"border:none;"+
+			"width:100%; height:10px"+
+			"' src='"+iframeSrc+"'></iframe>"
+		);*/
+
+
 	}
-	element.html(wholeHtml);
+	//element.html(wholeHtml);
+	/*
 	element.find("pre").each(function(){
 		if ($(this).find("code").find(".encrypted").length > 0) {
 			var newHtml = $(this).html();
@@ -244,18 +477,19 @@ function decryptElement(element) {
 			$("<pre>"+newHtml+"</pre>").insertAfter($(this));
 			$(this).remove();
 		}
-	});
-	element.find(".encrypted").each(function(){
+	});*/
+	/*element.find(".encrypted").each(function(){
 		$(this).css('color','white');
 		$(this).css('background-color','black');
 		$(this).css('padding','5px');
 		$(this).css('margin','5px');
 		$(this).find("a").css('color','#9cf');
+		$(this).after("<iframe src='chrome-extension://poclbmcamkbmgdapkibcajbpecbenngf/hello.html?"+$(this).text()+"'></iframe>");
 	});
 	element.find(".undecryptable").each(function(){
 		$(this).css('color','lightgray');
 		$(this).css('font-size','5pt');
-	});
+	});*/
 }
 
 
@@ -310,15 +544,16 @@ function distinguishPublicKeyElement(element) {
 		element.find(".newpublickey").each(function(){
 			$(this).css('color','magenta');
 	    	$(this).css('cursor','pointer');
-
+	    	var that = $(this);
 
 			$(this).on('click', function(){
+				//console.log("CLICKED!!!!");
     			if (confirm("Import this key for user " + username + "?")) {
     				//TODO: read key now.
     				var strippedKeytext = element.text().replace(/<p>/g,"");
     				PUBLIC_KEYS[username] = strippedKeytext;
     				addPublicKeyForUser(username, strippedKeytext, (function() {
-    					var el = element;
+    					var el = that;
     					return function(){
     						undistinguishPublicKeyElement(el);
     					};
@@ -358,7 +593,7 @@ function distinguishPublicKeyElement(element) {
 	}
 }*/
 
-
+/*
 function distinguishPrivateKeyElement(element) {
 	var wholeHtml = element.html();
 	var keytexts = [];
@@ -415,7 +650,7 @@ function distinguishPrivateKeyElement(element) {
 						return function(){
 							undistinguishPublicKeyElement(el);
 						};
-					})());*/
+					})());*//*
 				}
 			});
 		}
@@ -423,7 +658,7 @@ function distinguishPrivateKeyElement(element) {
 	});
 }
 
-
+*//*
 function addPrivateKey(privateKeytext, name, callback) {
 	try {
 		var fullKey = openpgp.read_privateKey(privateKeytext)[0];
@@ -462,7 +697,7 @@ function addPrivateKey(privateKeytext, name, callback) {
 }
 
 
-
+*/
 
 function undistinguishPublicKeyElement(element) {
 	alert("Key imported! Reload to start sending encrypted messages to this user or subreddit.");
@@ -473,7 +708,10 @@ function undistinguishPublicKeyElement(element) {
 	//TODO: distinguish this user as encryptable.
 }
 
+
+
 function addEncryptionOptions(form, author, modmailSubreddit) {
+	//console.log("AEO!!!!!!");
 	if (!modmailSubreddit) {
 		modmailSubreddit = "";
 	}
@@ -486,8 +724,19 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 	//console.log("THE SUBREDDIT IS:", sr, "AND THE PUBLIC_KEYS:", PUBLIC_KEYS);
 	var cancelB = form.find('.cancel').first();
 	var ta = form.find('textarea').first();
-	ta.addClass("encrypted");
-	ta.css('background-color','black').css('color','white');
+
+	var iframeSrc = "chrome-extension://"+chrome.runtime.id+"/encryptor.html?i="+(Math.floor(Math.random()*1000000000));
+	var ifr = $(
+		"<iframe scrolling='no' frameborder='0' style='"+
+		"overflow:hidden;"+
+		"border:none;"+
+		"width:505px; height:106px"+
+		"' src='"+iframeSrc+"'></iframe>"
+	).insertAfter(ta);
+	ta.css("display","none");
+
+	//ta.addClass("encrypted");
+	//ta.css('background-color','black').css('color','white');
 	var eb = $('<span class="encryptbox"><input type="checkbox" checked="checked" />encrypt </span>').insertAfter(cancelB);
 
 	var inGroups = [];
@@ -510,187 +759,38 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 			return list;
 		})()+
 		'</select>').insertAfter(eb);
-	groupsMenu.css("width","120px");
+	groupsMenu.css("width", resIsEnabled ? "100px" : "120px");
 	//}
 	eb.on('change', function(){
-		if (ta.hasClass("encrypted")) {
+		if (ta.css("display")==="none") {
 			if (groupsMenu) {
 				groupsMenu.attr("disabled","disabled");
 			}
-			ta.css('background-color','inherit').css('color','inherit');
+			ta.css("display","block");
+			ifr.css("display","none")
 		} else {
 			if (groupsMenu) {
 				groupsMenu.attr("disabled",null);
 			}
-			ta.css('background-color','black').css('color','white');
+			ta.css("display","none");
+			ifr.css("display","block")
 		}
-		ta.toggleClass("encrypted");
+		//ta.toggleClass("encrypted");
 	});
 	var sb = form.find('.save').first();
 	sb.on('click', function(){
 		var checkbox = $(this).closest('div').find('input').first();
 		if (checkbox.attr('checked')==='checked') {
-			//TODO: If there's a server-side error, restore the plaintext.
-			var plaintext = ta.val();
-			if (plaintext.length === 0) {
-				return false; //Don't allow empty comments!
-			}
-			var keys = [];
-			
-			//If we're encrypting to a group, add all the keys for that group.
-			//If we're encrypting to a subreddit, add that subreddit's key.
-			var isToSubreddit = false;
-			if (groupsMenu && groupsMenu.val()) {
-				if (groupsMenu.val().charAt(0)==="/") {
-					keys.push(PUBLIC_KEYS[groupsMenu.val()]);
-					isToSubreddit = true;
-				} else {
-					var toGroup;
-					for (var i=0; i<userGroups.length; i++) {
-						if (userGroups[i].name === groupsMenu.val()) {
-							toGroup = userGroups[i];
-							break;
-						}
-					}
-					for (var i=0; i<toGroup.members.length; i++) {
-						var memberKey = PUBLIC_KEYS[toGroup.members[i]];
-						if (memberKey && keys.indexOf(memberKey) === -1) {
-							keys.push(memberKey);
-						}
-					}												
-				}
-			} else {
-				keys.push(PUBLIC_KEYS[author]);
-			}
-			//Lastly, add the user's own key, if it hasn't already been added,
-			//and if we're not encrypting to the whole subreddit.
-			if (!isToSubreddit) {
-				var postingAs = $(".user").first().children().first().text();
-				if (PUBLIC_KEYS[postingAs]) {
-					if (keys.indexOf(PUBLIC_KEYS[postingAs]) === -1) {
-						keys.push(PUBLIC_KEYS[postingAs]);
-					}
-				} else {
-					if (!confirm("You won't be able to read this message later because you don't have a keypair loaded for /u/"+postingAs+". Continue?")) {
-						return false;
-					}
-				}
-			}
-			var encryption = encrypt(plaintext, keys);
-			if (encryption) {
-				if (encryption.length > 10000) {
-					alert("Error: The encryption would be too long.");
-					return false;
-				} else {
-					ta.val(encryption);
-					ta.css('background-color','inherit').css('color','inherit');
-					ta.toggleClass("encrypted");
-					checkbox.attr('checked',null);
+			var iframeWin = ifr[0].contentWindow;
+			var groupSelection = groupsMenu ? groupsMenu.val() : "";
+			iframeWin.postMessage({
+				groupSelection: groupSelection,
+				author: author,
+				myself: postingAs
+			}, "chrome-extension://"+chrome.runtime.id);
+			console.log("Requested ciphertext");
 
-					//Apply transformations to that thing and stop listening.
-
-					var thingsOnPage = $(".sitetable").find(".thing");
-					var numberOfThings = thingsOnPage.length;
-					var newThingListener = setInterval((function(){
-						//var child = form.closest(".child");
-						if (true) {
-							return function(){
-								console.log("Checking for new thing");
-								var thingsNowOnPage = $(".sitetable").find(".thing");
-								if (thingsNowOnPage.length > numberOfThings) {
-									console.log("New thing detected!");
-									clearInterval(newThingListener);
-									thingsNowOnPage.each(function(){
-										thisThingClassSelector = ("."+$(this).attr("class").replace(/ /g, ".")).replace("..",".");
-										thisThingClassSelector = thisThingClassSelector.slice(0, thisThingClassSelector.length-1);
-										// Is this thing a new one?
-										if (thingsOnPage.filter(thisThingClassSelector).length === 0) {
-											// do something with $(this).find(".noncollapsed").find("form").first()
-											var newElement = $(thisThingClassSelector).find(".noncollapsed");
-											if (newElement.length === 0) {
-												return;
-											}
-											console.log("##", thisThingClassSelector);
-											//console.log("######", newForm, newForm.length);
-											decryptElement(newElement.find("div.md"));
-
-
-			//begin WET code
-			var modmailIsEncryptable = false;
-			var modmailSubreddit = 
-				newElement.closest(".message-parent")
-				.find("span.correspondent.reddit")
-				.find("a").first().text();
-
-			//console.log("WE've identified the modmail subreddit as:", modmailSubreddit);
-			if (PUBLIC_KEYS[modmailSubreddit.slice(2)]) {
-				modmailIsEncryptable = true;
-			}
-			var authorElement = newElement.find(".author").first();
-			var author;
-			if (authorElement.length > 0) {
-				author = authorElement.text();
-			} else {
-				//It must be a modmail message from myself.
-				author = $(".user").first().children().first().text(); //TODO: make that a global variable
-			}
-			//console.log("NEW COMMENT AUTHOR", author, PUBLIC_KEYS[author]);
-			if (PUBLIC_KEYS[author]) {
-				//console.log("Distinguishing:", authorElement);
-				authorElement.css("background-color","black").css("color","yellow").css("padding","3px");
-				authorElement.addClass("encryptable");
-				var rrb = newElement.find(".buttons").find("a:contains('reply')").first();
-				//I think that actually still works.
-				if (rrb.length === 1) {				
-					rrb.on('click',function() {
-						if (!$(this).attr('alreadyclicked')) {
-							$(this).attr("alreadyclicked","yes");
-							var thing = $(this).closest('.thing');
-							var form = thing.find(".cloneable").first();
-							if (topFormIsEncryptable) {
-								removeEncryptionOptions(form);
-							}
-							addEncryptionOptions(form, author, modmailSubreddit);
-						}
-					});
-				}
-			} else if (subredditIsEncryptable || modmailIsEncryptable) { //TODO: refactor to avoid duplication
-				var rrb = newElement.find(".buttons").find("a:contains('reply')").first();
-				if (rrb.length === 1) {				
-					rrb.on('click',function() {
-						if (!$(this).attr('alreadyclicked')) {
-							$(this).attr("alreadyclicked","yes");
-							var thing = $(this).closest('.thing');
-							var form = thing.find(".cloneable").first();
-							if (topFormIsEncryptable) {
-								removeEncryptionOptions(form);
-							}
-							addEncryptionOptions(form, author, modmailSubreddit);
-						}
-					});
-				}
-			}
-			//end WET code
-
-
-
-
-										}
-									});
-									
-									
-								}
-								
-							};
-						}
-
-
-					})(), 100);
-					return true;
-				}
-			} else {
-				return false;
-			}
+			return false;
 		} else {
 			var plaintext = ta.val();
 			if (plaintext.indexOf("-----BEGIN PGP PRIVATE KEY BLOCK-----") !== -1 && plaintext.indexOf("-----END PGP PRIVATE KEY BLOCK-----") !== -1) {
@@ -699,6 +799,7 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 					"Please encrypt it before sending.");
 				return false;
 			}
+			//TODO: initiate newThing detector, and when it's found, analyze the new thing and apply stuff to it.
 			return true;
 		}
 	});
@@ -709,7 +810,8 @@ function removeEncryptionOptions(form) {
 	form.find(".encryptbox").remove();
 	form.find(".encryptselector").remove();
 	var ta = form.find('textarea').first();
-	ta.css('background-color','inherit').css('color','inherit');
+	ta.css('display','block');
+	form.find("iframe").remove();
 	var sb = form.find('.save').first();
 	sb.on('click', null);
 }
@@ -810,9 +912,6 @@ var mainFunction = function() {
     	}
     	if ($(this).text().indexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----") !== -1) {
     		distinguishPublicKeyElement($(this));
-    	}
-    	if ($(this).text().indexOf("-----BEGIN PGP PRIVATE KEY BLOCK-----") !== -1) {
-    		distinguishPrivateKeyElement($(this));
     	}
     });
 }

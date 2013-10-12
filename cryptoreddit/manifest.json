@@ -1,18 +1,24 @@
 {
     "name": "CryptoReddit",
-    "version": "0.32",
+    "version": "0.33",
 
     "options_page": "options.html",
     "update_url": "http://raw.github.com/cryptoreddit/cryptoreddit-chrome/master/updates.xml",
     "description": "PGP on reddit",
     "permissions": ["storage"],
 
+    "web_accessible_resources": [
+    	"decryptor.html",
+        "encryptor.html",
+        "itshappening.gif"
+  	],
+
     "content_scripts": [
         {
             "matches": ["http://www.reddit.com/*"],
             "js": [
                     "/js/external/jquery.js", 
-                    "/js/external/openpgp.min.js",
+                    "/js/external/openpgp.js",
                     "/js/external/underscore.min.js",
                     "/js/external/snuownd.js",
                     "/js/utilities.js",

@@ -7,7 +7,7 @@ function rewriteComment(message, shorten, sr) {
 		versionNumber = chrome.runtime.getManifest().version;
 	}
 	message = message.replace("Comment: http://openpgpjs.org", "Comment: /r" + (sr || "/cryptoreddit"));
-	message = message.replace("Version: OpenPGP.js v.1.20130712","Version: CryptoReddit "+versionNumber);
+	message = message.replace("Version: OpenPGP.js v.1.20130825","Version: CryptoReddit "+versionNumber);
 	//Conceal overly long messages:
 	if (shorten && message.length > 1000) {
 		message = message.replace(/\r/g,"")
