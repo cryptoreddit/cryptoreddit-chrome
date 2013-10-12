@@ -115,25 +115,22 @@ function decrypt(messageText, privateKey) {
     var recipientNames = [];
     try {
     	msg = openpgp.read_message(messageText);
-	    for (var i=0; i<msg[0].sessionKeys.length; i++) {
-	    	var keyId = msg[0].sessionKeys[i].keyId.bytes;
+
+    	_.each(msg[0].sessionKeys, function(sessionKey){
+	    	var keyId = sessionKey.keyId.bytes;
 	    	for (var un in PUBLIC_KEYS) {
-	    		if (PUBLIC_KEYS.hasOwnProperty(un)) {
+	    		//if (PUBLIC_KEYS.hasOwnProperty(un)) {
 		    		var pkid = PUBLIC_KEYS[un][0].getKeyId();
 		    		if (keyId === pkid) {
 		    			recipientNames.push(un);
 		    			break;
 		    		}
-		    	}
+		    	//}
 	    	}
-	    }
+    	});
     } catch (error) {
     	return [false, []];
     }
-
-    var keymat = null;
-    var sesskey = null;
-
 
 
     while (recipientNames.length < msg[0].sessionKeys.length) {
@@ -141,6 +138,38 @@ function decrypt(messageText, privateKey) {
     }
 
     // Find the private (sub)key for the session key of the message
+    /*
+    _.each(msg[0].sessionKeys, function(sesskey){
+		if (priv_key[0].privateKeyPacket.publicKey.getKeyId() == sesskey.keyId.bytes) {
+		    keymat = { key: priv_key[0], keymaterial: priv_key[0].privateKeyPacket};
+		    break;
+		}
+		_.each(priv_key[0].subKeys, function(privSubkey) {
+		    if (privSubkey.publicKey.getKeyId() == sesskey.keyId.bytes) {
+		      keymat = { key: priv_key[0], keymaterial: privSubkey};
+		      break;
+		    }
+		});
+    });*/
+
+	var keymat = { key: priv_key[0], keymaterial: priv_key[0].privateKeyPacket};
+    var sesskey = _.find(msg[0].sessionKeys, function(sesskey){
+    	return priv_key[0].privateKeyPacket.publicKey.getKeyId() == sesskey.keyId.bytes;
+    });
+
+    if (sesskey) {
+	    var subkey = _.find(priv_key[0].subKeys, function(privSubkey){
+	    	return privSubkey.publicKey.getKeyId() == sesskey.keyId.bytes;
+	    });
+
+	    if (subkey){
+	    	keymat = { key: priv_key[0], keymaterial: subkey};
+	    }
+    }
+
+
+
+    /*
     for (var i = 0; i < msg[0].sessionKeys.length; i++) {
       if (priv_key[0].privateKeyPacket.publicKey.getKeyId() == msg[0].sessionKeys[i].keyId.bytes) {
         keymat = { key: priv_key[0], keymaterial: priv_key[0].privateKeyPacket};
@@ -154,8 +183,8 @@ function decrypt(messageText, privateKey) {
           break;
         }
       }
-    }
-    if (keymat != null) {
+    }*/
+    if (keymat) {
       try {
       	return [msg[0].decrypt(keymat, sesskey), recipientNames];
       } catch(error) {
