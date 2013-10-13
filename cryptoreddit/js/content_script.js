@@ -275,6 +275,8 @@ eventer(messageEvent,function(e) {
 										npt.find("a[alreadyclicked='yes']").attr("alreadyclicked",null);
 										decryptElement(newElement.find("div.md"));
 
+										offerEncryptionIfPossible(newElement);
+		/*
 
 		//begin WET code
 		var modmailIsEncryptable = false;
@@ -282,8 +284,6 @@ eventer(messageEvent,function(e) {
 			newElement.closest(".message-parent")
 			.find("span.correspondent.reddit")
 			.find("a").first().text();
-
-		//console.log("WE've identified the modmail subreddit as:", modmailSubreddit);
 		if (PUBLIC_KEYS[modmailSubreddit.slice(2)]) {
 			modmailIsEncryptable = true;
 		}
@@ -331,7 +331,7 @@ eventer(messageEvent,function(e) {
 				});
 			}
 		}
-		//end WET code
+		//end WET code */
 
 
 
@@ -570,63 +570,7 @@ var mainFunction = function() {
 
 	//$(".author").each(function(){
 	$(".tagline").each(function(){
-		var modmailIsEncryptable = false;
-		var modmailSubreddit = 
-			$(this).closest(".message-parent")
-			.find("span.correspondent.reddit")
-			.find("a").first().text();
-		if (PUBLIC_KEYS[modmailSubreddit.slice(2)]) {
-			modmailIsEncryptable = true;
-		}
-		var authorElement = $(this).find(".author").first();
-		var author;
-		if (authorElement.length > 0) {
-			author = authorElement.text();
-		} else {
-			//It must be a modmail message from myself.
-			author = $(".user").first().children().first().text(); //TODO: make that a global variable
-		}
-		if (PUBLIC_KEYS[author]) {
-			authorElement.css("background-color","black").css("color","yellow").css("padding","3px");
-			authorElement.addClass("encryptable");
-		}
-		if (PUBLIC_KEYS[author] || modmailIsEncryptable) {
-			var rrb = $(this).closest(".noncollapsed").find(".buttons").find("a:contains('reply')").first();
-			//I think that actually still works.
-			if (rrb.length === 1) {				
-				rrb.on('click',function() {
-					//console.log("clicked reply");
-					if (!$(this).attr('alreadyclicked')) {
-						$(this).attr("alreadyclicked","yes");
-						var thing = $(this).closest('.thing');
-						var form = thing.find(".cloneable").first();
-						if (topFormIsEncryptable) {
-							removeEncryptionOptions(form);
-						}
-						addEncryptionOptions(form, author, modmailSubreddit);
-						if (!PUBLIC_KEYS[author]) {
-							form.find('.save').first().closest('div').find('input').first().click();
-						}
-					}
-				});
-			}
-		} else if (subredditIsEncryptable || modmailIsEncryptable) { //TODO: refactor to avoid duplication
-			var rrb = $(this).closest(".noncollapsed").find(".buttons").find("a:contains('reply')").first();
-			if (rrb.length === 1) {				
-				rrb.on('click',function() {
-					//console.log("clicked reply");
-					if (!$(this).attr('alreadyclicked')) {
-						$(this).attr("alreadyclicked","yes");
-						var thing = $(this).closest('.thing');
-						var form = thing.find(".cloneable").first();
-						if (topFormIsEncryptable) {
-							removeEncryptionOptions(form);
-						}
-						addEncryptionOptions(form, author, modmailSubreddit);
-					}
-				});
-			}
-		}
+		offerEncryptionIfPossible($(this));
 	});
 
 	//Distinguish encryptable subreddits in modmail
@@ -650,3 +594,46 @@ var mainFunction = function() {
     	}
     });
 }
+
+
+
+// Check encryptability
+
+	function offerEncryptionIfPossible(taglineElement) {
+		var modmailSubreddit = 
+			taglineElement.closest(".message-parent")
+			.find("span.correspondent.reddit")
+			.find("a").first().text();
+		var modmailIsEncryptable = !!PUBLIC_KEYS[modmailSubreddit.slice(2)];
+
+		var authorElement = taglineElement.find(".author").first();
+		var author = authorElement.text() || postingAs;
+		var authorIsEncryptable = !!PUBLIC_KEYS[author];
+
+		if (authorIsEncryptable) {
+			authorElement.css("background-color","black").css("color","yellow").css("padding","3px");
+			authorElement.addClass("encryptable");
+		}
+		if (authorIsEncryptable || modmailIsEncryptable || subredditIsEncryptable) {
+			var rrb = taglineElement.closest(".noncollapsed").find(".buttons").find("a:contains('reply')").first();
+			//I think that actually still works.
+			if (rrb.length === 1) {				
+				rrb.on('click',function() {
+					//console.log("clicked reply");
+					if (!taglineElement.attr('alreadyclicked')) {
+						taglineElement.attr("alreadyclicked","yes");
+						var thing = taglineElement.closest('.thing');
+						var form = thing.find(".cloneable").first();
+						if (topFormIsEncryptable) {
+							removeEncryptionOptions(form);
+						}
+						addEncryptionOptions(form, author, modmailSubreddit);
+						// If the author themself isn't encryptable, don't check the box by default.
+						if (!authorIsEncryptable) {
+							form.find('.save').first().closest('div').find('input').first().click();
+						}
+					}
+				});
+			}
+		}
+	}
