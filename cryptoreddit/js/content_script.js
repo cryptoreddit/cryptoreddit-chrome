@@ -188,16 +188,6 @@ function attemptToDecrypt(ciphertext, callback) {
 //Given a list of usernames, find the most concise representation
 //in terms of the groups that we have defined.
 function analyzeRecipients(recipientNames) {
-	/*var candidates = [[]];
-	var extras = 0;
-	_.each(recipientNames, function(recipientName){
-		if (recipientName === "+") {
-			extras += 1;
-		} else {
-			candidates[0].push(recipientName);
-		}
-	});*/
-
 	// How many "+" are there?
 	var extras = _.filter(recipientNames, function(recipientName) {
 		return recipientName === "+";
@@ -209,7 +199,6 @@ function analyzeRecipients(recipientNames) {
 		var inclusions = _.filter(recipientNames, function(recipient){
 			return (recipient !== "+" && group.members.indexOf(recipient) === -1);
 		});
-
 		// List all group members who are NOT recipients
 		var exclusions = _.filter(group.members, function(groupMember){
 			return (recipientNames.indexOf(groupMember) === -1);
@@ -217,7 +206,6 @@ function analyzeRecipients(recipientNames) {
 		exclusions = _.map(exclusions, function(excludedName){
 			return "!"+excludedName;
 		});
-
 		var candidate = ["@"+group.name].concat(inclusions).concat(exclusions);
 		return candidate;
 	});
@@ -226,43 +214,27 @@ function analyzeRecipients(recipientNames) {
 	var grouplessCandidate = _.filter(recipientNames, function(recipientName) {
 		return recipientName !== "+";
 	});
-
 	candidates.push(grouplessCandidate);
 
 	// Find the most concise (i.e. shortest) candidate.
-
 	var bestCandidate = _.min(candidates, function(candidate){
 		return candidate.length;
 	});
-
-	/*
-	_.each(userGroups, function(group){
-
-		candidates.push(candidate);
-	});*/
-
-
-	/*
-	var bestSoFar;
-	for (var i=0; i<candidates.length; i++) {
-		if (!bestSoFar || bestSoFar.length > candidates[i].length) {
-			bestSoFar = candidates[i];
-		}
-	}*/
 	return bestCandidate.join(" ") + (extras ? " +"+extras : "");
 }
 
 
-// Create IE + others compatible event handler
+// Listen for messages from iframes:
 var eventMethod = window.addEventListener ? "addEventListener" : "attachEvent";
 var eventer = window[eventMethod];
-var messageEvent = eventMethod == "attachEvent" ? "onmessage" : "message";
-// Listen to message from child window
+var messageEvent = eventMethod === "attachEvent" ? "onmessage" : "message";
 eventer(messageEvent,function(e) {
 	var eventOriginator = $("iframe[src='"+e.data.src+"']");
+	// Received "resize height" message
 	if (e.data.height) {
 		eventOriginator.height(e.data.height+15);
 	}
+	// Received "ciphertext" message
 	if (typeof e.data.ciphertext !== "undefined") {
 		//console.log("GOT ciphertext", e.data.ciphertext);
 		eventOriginator.prev("textarea").val(e.data.ciphertext).css("display","block");
@@ -382,40 +354,49 @@ eventer(messageEvent,function(e) {
 },false);
 
 
-function decryptElement(element) {
-	var wholeHtml = element.html();
-	var ciphertexts = [];
+
+
+// Go through html, and return a list of elements
+// that begin with "beginner" and end with "ender".
+function findMarkedBlocks(html, beginner, ender) {
+	var foundBlocks = [];
 	var fromIndex = 0;
-	while (fromIndex < wholeHtml.length) {
-		var beginIndex = wholeHtml.indexOf("-----BEGIN PGP MESSAGE-----", fromIndex);
-		var endIndex = wholeHtml.indexOf("-----END PGP MESSAGE-----", fromIndex);
+	while (fromIndex < html.length) {
+		var beginIndex = html.indexOf(beginner, fromIndex);
+		var endIndex = html.indexOf(ender, fromIndex);
 		if (beginIndex === -1 || endIndex === -1) {
 			break;
 		} else {
-			fromIndex = endIndex+25;
-			var ciphertext = wholeHtml.substring(beginIndex, fromIndex);
-			ciphertexts.push(ciphertext);
+			fromIndex = endIndex+ender.length;
+			var found = html.substring(beginIndex, fromIndex);
+			foundBlocks.push(found);
 		}
 	}
-	for (var j=0; j<ciphertexts.length; j++) {
-		var ciphertext = ciphertexts[j];
-		var originalCiphertext = ciphertexts[j];
+	return foundBlocks;
+}
+
+
+
+
+function decryptElement(element) {
+	var wholeHtml = element.html();
+	var ciphertexts = findMarkedBlocks(wholeHtml, "-----BEGIN PGP MESSAGE-----", "-----END PGP MESSAGE-----");
+	// Replace them one by one with iframes, and tell each iframe to decrypt the message.
+	_.each(ciphertexts, function(ciphertext){
+		var originalCiphertext = ciphertext;
 		if (ciphertext.indexOf("//#__") !== -1) {
 			ciphertext = ciphertext.replace(/_/g,"\n");
-		} //Phase this out?
-		//TODO: Find a more permanent fix for this. Might be a bug in openpgpjs, or with us.
+		} // Parse "hidden ciphertext" format
+		// Remove extraneous line breaks (caused by old OpenPGPJS bug)
 		ciphertext = ciphertext.replace("\n\n","_").replace(/\n\n/g, "\n").replace("_","\n\n").replace(/<p>/g,"");
-
 		attemptToDecrypt(ciphertext, function() {
 			var iframeSrc = "chrome-extension://"+chrome.runtime.id+"/decryptor.html?m="+hashCode(ciphertext);
-			//console.log("INSERTING IFRAME:", iframeSrc)
-
-			var unenhancedHtml = element.html().replace(/ class="imgScanned"/g,'');
-			//hackish...
-			if (unenhancedHtml.indexOf(originalCiphertext) ===-1) {
-				console.log("Could not find:", originalCiphertext, "in:", unenhancedHtml);
+			// Remove RES alterations from ciphertext HTML
+			var dehancedHtml = element.html().replace(/ class="imgScanned"/g,'');
+			if (dehancedHtml.indexOf(originalCiphertext) ===-1) {
+				console.log("Could not find:", originalCiphertext, "in:", dehancedHtml);
 			}
-			element.html( unenhancedHtml.replace(originalCiphertext,
+			element.html( dehancedHtml.replace(originalCiphertext,
 				"<iframe scrolling='no' frameborder='0' style='"+
 				"overflow:hidden;"+
 				"border:none;"+
@@ -423,66 +404,7 @@ function decryptElement(element) {
 				"' src='"+iframeSrc+"'></iframe>"
 			));
 		});
-
-
-		/*var decryption;
-		var recipientNames;
-		var private_key_usernames = Object.keys(PRIVATE_KEYS);
-		for (var i=0; i<private_key_usernames.length; i++) {
-			var res = decrypt(ciphertext, PRIVATE_KEYS[private_key_usernames[i]].privateKey);
-			decryption = res[0];
-			recipientNames = res[1];
-			if (decryption) {
-				break;
-			}
-		}
-		var hoverText = analyzeRecipients(recipientNames);
-		if (decryption) {
-			wholeHtml = wholeHtml.replace(originalCiphertext, "<div class='encrypted' title='"+hoverText+"'>"+escape(ciphertext)+"</div>")
-		} else {
-			wholeHtml = wholeHtml.replace(originalCiphertext, "<div class='undecryptable' title='"+hoverText+"'>"+ciphertext+"</div>")
-		}*/
-
-		//TODO: decrypt here, and add to cache.
-		//Have the iframe just load the plaintext from memory.
-		/*var iframeSrc = "chrome-extension://"+chrome.runtime.id+"/decryptor.html?"+escape(ciphertext);
-		wholeHtml = wholeHtml.replace(originalCiphertext,
-			"<iframe scrolling='no' frameborder='0' style='"+
-			"overflow:hidden;"+
-			"border:none;"+
-			"width:100%; height:10px"+
-			"' src='"+iframeSrc+"'></iframe>"
-		);*/
-
-
-	}
-	//element.html(wholeHtml);
-	/*
-	element.find("pre").each(function(){
-		if ($(this).find("code").find(".encrypted").length > 0) {
-			var newHtml = $(this).html();
-			var atIndex = 0;
-			$(this).find("code").find(".encrypted").each(function(){
-				var toh = $(this)[0].outerHTML;
-				newHtml = newHtml.slice(0,atIndex) + newHtml.slice(atIndex).replace(toh, "</code></pre>"+toh+"<pre><code>");
-				atIndex = atIndex + newHtml.slice(atIndex).indexOf(toh)+11;
-			});
-			$("<pre>"+newHtml+"</pre>").insertAfter($(this));
-			$(this).remove();
-		}
-	});*/
-	/*element.find(".encrypted").each(function(){
-		$(this).css('color','white');
-		$(this).css('background-color','black');
-		$(this).css('padding','5px');
-		$(this).css('margin','5px');
-		$(this).find("a").css('color','#9cf');
-		$(this).after("<iframe src='chrome-extension://poclbmcamkbmgdapkibcajbpecbenngf/hello.html?"+$(this).text()+"'></iframe>");
 	});
-	element.find(".undecryptable").each(function(){
-		$(this).css('color','lightgray');
-		$(this).css('font-size','5pt');
-	});*/
 }
 
 
@@ -490,59 +412,25 @@ function distinguishPublicKeyElement(element) {
 	var username = element.closest(".entry").find(".author").first().text();
 	if (!PUBLIC_KEYS[username]) {
 		var wholeHtml = element.html();
-		var keytexts = [];
-		var fromIndex = 0;
-		while (fromIndex < wholeHtml.length) {
-			var beginIndex = wholeHtml.indexOf("-----BEGIN PGP PUBLIC KEY BLOCK-----", fromIndex);
-			var endIndex = wholeHtml.indexOf("-----END PGP PUBLIC KEY BLOCK-----", fromIndex);
-			if (beginIndex === -1 || endIndex === -1) {
-				break;
-			} else {
-				fromIndex = endIndex+34;
-				var keytext = wholeHtml.substring(beginIndex, fromIndex);
-				keytexts.push(keytext);
-			}
-		}
-		for (var j=0; j<keytexts.length; j++) {
-			var keytext = keytexts[j];
+		var keytexts = findMarkedBlocks(wholeHtml, "-----BEGIN PGP PUBLIC KEY BLOCK-----","-----END PGP PUBLIC KEY BLOCK-----");
+		_.each(keytexts, function(keytext){
 		    try {
 		    	var strippedKeytext = keytext.replace(/<p>/g,"");
 				openpgp.read_publicKey(strippedKeytext);
 				wholeHtml = wholeHtml.replace(keytext, "<div class='newpublickey'>"+keytext+"</div>")
-
-				/*
-				element.addClass("newpublickey");
-				element.css('color','magenta');
-	    		element.css('cursor','pointer');
-	    		element.on('click', function(){
-	    			if (confirm("Import this key for user " + username + "?")) {
-	    				//TODO: read key now.
-	    				PUBLIC_KEYS[username] = element.text();
-	    				addPublicKeyForUser(username, element.text(), (function() {
-	    					var el = element;
-	    					return function(){
-	    						undistinguishPublicKeyElement(el);
-	    					};
-	    				})());
-	    			}
-	    		});*/
 			} catch(error) {
 				console.log("couldn't read", keytext, error);
-				return;
+				//return;
 			}
-
-
-		}
+		});
 		element.html(wholeHtml);
 		element.find(".newpublickey").each(function(){
 			$(this).css('color','magenta');
 	    	$(this).css('cursor','pointer');
 	    	var that = $(this);
-
 			$(this).on('click', function(){
 				//console.log("CLICKED!!!!");
     			if (confirm("Import this key for user " + username + "?")) {
-    				//TODO: read key now.
     				var strippedKeytext = element.text().replace(/<p>/g,"");
     				PUBLIC_KEYS[username] = strippedKeytext;
     				addPublicKeyForUser(username, strippedKeytext, (function() {
@@ -558,143 +446,10 @@ function distinguishPublicKeyElement(element) {
 }
 
 
-/*
-function distinguishPublicKeyElement(element) {
-	var username = element.closest(".entry").find(".author").first().text();
-	if (!PUBLIC_KEYS[username]) {
-	    try {
-			openpgp.read_publicKey(element.text());
-			element.addClass("newpublickey");
-			element.css('color','magenta');
-    		element.css('cursor','pointer');
-    		element.on('click', function(){
-    			if (confirm("Import this key for user " + username + "?")) {
-    				//TODO: read key now.
-    				PUBLIC_KEYS[username] = element.text();
-    				addPublicKeyForUser(username, element.text(), (function() {
-    					var el = element;
-    					return function(){
-    						undistinguishPublicKeyElement(el);
-    					};
-    				})());
-    			}
-    		});
-		} catch(error) {
-			console.log("couldn't read", element.text(), error);
-			return;
-		}
-	}
-}*/
 
-/*
-function distinguishPrivateKeyElement(element) {
-	var wholeHtml = element.html();
-	var keytexts = [];
-	var fromIndex = 0;
-	while (fromIndex < wholeHtml.length) {
-		var beginIndex = wholeHtml.indexOf("-----BEGIN PGP PRIVATE KEY BLOCK-----", fromIndex);
-		var endIndex = wholeHtml.indexOf("-----END PGP PRIVATE KEY BLOCK-----", fromIndex);
-		if (beginIndex === -1 || endIndex === -1) {
-			break;
-		} else {
-			fromIndex = endIndex+35;
-			var keytext = wholeHtml.substring(beginIndex, fromIndex);
-			keytexts.push(keytext);
-		}
-	}
-	for (var j=0; j<keytexts.length; j++) {
-		var keytext = keytexts[j];
-	    try {
-	    	var strippedKeytext = keytext.replace(/<p>/g,"");
-			openpgp.read_privateKey(strippedKeytext);
-			wholeHtml = wholeHtml.replace(keytext, "<div class='newprivatekey'>"+keytext+"</div>")
-		} catch(error) {
-			console.log("couldn't read", keytext, error);
-			return;
-		}
-	}
-	element.html(wholeHtml);
-	element.find(".newprivatekey").each(function(){
-		var et = $(this).text();
-		var start = et.indexOf("Comment: ");
-		var end = start+et.slice(start).indexOf("\n");
-		var subredditName = et.slice(start,end).slice(9);
-		var sr;
-		if (subredditName.indexOf("/r/")===0) {
-			sr = subredditName.slice(2);
-		}
-		if (sr && !PUBLIC_KEYS[sr]) {
-			var ell = $(this);
-			ell.css('color','lime');
-	    	ell.css('cursor','pointer');
-			ell.on('click', function(){
-				if (confirm("Import this private key for /r" + sr + "?")) {
-					//TODO: read key now.
-					var strippedKeytext = ell.text().replace(/<p>/g,"");
-					addPrivateKey(strippedKeytext, sr, (function() {
-						//var el = $(this);
-						return function(){
-							undistinguishPublicKeyElement(ell);
-						}
-					})());
-					/*PUBLIC_KEYS[username] = strippedKeytext;
-					addPublicKeyForUser(username, strippedKeytext, (function() {
-						var el = element;
-						return function(){
-							undistinguishPublicKeyElement(el);
-						};
-					})());*//*
-				}
-			});
-		}
-
-	});
-}
-
-*//*
-function addPrivateKey(privateKeytext, name, callback) {
-	try {
-		var fullKey = openpgp.read_privateKey(privateKeytext)[0];
-		var publicKeytext = fullKey.extractPublicKey();
-		publicKeytext = rewriteComment(publicKeytext);
-		PRIVATE_KEYS[name] = {
-			privateKey: privateKeytext, 
-			publicKey: publicKeytext
-		};
-		var k = openpgp.read_publicKey(publicKeytext);
-		PUBLIC_KEYS[name] = k;
-		//or something like that
-		var timestamp = new Date().getTime();
-		var source = "";
-		var id=-1;
-		for (var i=0; i<yourKeys.length; i++) {
-			if (id < yourKeys[i].id) {
-				id = yourKeys[i].id;
-			}
-		}
-		id = id+1;
-		var entry = {
-			username:name,
-			publicKeytext:publicKeytext,
-			privateKeytext:privateKeytext,
-			timestamp:timestamp,
-			source:source,
-			id:id
-		};
-		yourKeys.push(entry);
-		chrome.storage.local.set({'yourKeys': yourKeys}, callback);
-	} catch(error) {
-		console.log("IMPORT PRIVATE KEY ERROR:", error);
-		alert("Could not import invalid key for /r" + name);
-	}
-}
-
-
-*/
 
 function undistinguishPublicKeyElement(element) {
 	alert("Key imported! Reload to start sending encrypted messages to this user or subreddit.");
-	//console.log(element);
 	element.css('color','inherit');
 	element.css('cursor','inherit');
 	element.unbind('click');
