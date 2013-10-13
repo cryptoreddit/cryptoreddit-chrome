@@ -68,9 +68,7 @@ function getOthersKeys() {
 				console.log("Could not import invalid key for /u/" + key.username);
 			}
 		}
-
 		_.each(othersKeys, importKey);
-
 		getMessageCache();
 	});
 }
@@ -86,15 +84,11 @@ function getMessageCache() {
 		// Uncache messages that haven't been accessed in a certain amount of time.
 		var currentTime = (new Date()).getTime();
 		var cacheTimeMilliseconds = messageCache[-1]*60*1000;
-		//console.log("MC", messageCache);
-		//console.log("CT", cacheTimeMilliseconds)
 		for (var hashKey in messageCache) {
-			if (parseInt(hashKey) >= 0) {
-				var timeSince = currentTime - messageCache[hashKey].lastAccessed;
-				//console.log("TIME SINCE:", timeSince);
-				if (timeSince > cacheTimeMilliseconds) {
-					delete messageCache[hashKey];
-				}
+			if (parseInt(hashKey) >= 0 && 
+				currentTime - messageCache[hashKey].lastAccessed > cacheTimeMilliseconds
+			) {
+				delete messageCache[hashKey];
 			}
 		}
 		mainFunction();
@@ -115,42 +109,22 @@ function decrypt(messageText, privateKey) {
     var recipientNames = [];
     try {
     	msg = openpgp.read_message(messageText);
-
     	_.each(msg[0].sessionKeys, function(sessionKey){
-	    	var keyId = sessionKey.keyId.bytes;
 	    	for (var un in PUBLIC_KEYS) {
-	    		//if (PUBLIC_KEYS.hasOwnProperty(un)) {
-		    		var pkid = PUBLIC_KEYS[un][0].getKeyId();
-		    		if (keyId === pkid) {
-		    			recipientNames.push(un);
-		    			break;
-		    		}
-		    	//}
+	    		var pkid = PUBLIC_KEYS[un][0].getKeyId();
+	    		if (sessionKey.keyId.bytes === pkid) {
+	    			recipientNames.push(un);
+	    			break;
+	    		}
 	    	}
     	});
     } catch (error) {
     	return [false, []];
     }
 
-
     while (recipientNames.length < msg[0].sessionKeys.length) {
     	recipientNames.push("+");
     }
-
-    // Find the private (sub)key for the session key of the message
-    /*
-    _.each(msg[0].sessionKeys, function(sesskey){
-		if (priv_key[0].privateKeyPacket.publicKey.getKeyId() == sesskey.keyId.bytes) {
-		    keymat = { key: priv_key[0], keymaterial: priv_key[0].privateKeyPacket};
-		    break;
-		}
-		_.each(priv_key[0].subKeys, function(privSubkey) {
-		    if (privSubkey.publicKey.getKeyId() == sesskey.keyId.bytes) {
-		      keymat = { key: priv_key[0], keymaterial: privSubkey};
-		      break;
-		    }
-		});
-    });*/
 
 	var keymat = { key: priv_key[0], keymaterial: priv_key[0].privateKeyPacket};
     var sesskey = _.find(msg[0].sessionKeys, function(sesskey){
@@ -161,36 +135,17 @@ function decrypt(messageText, privateKey) {
 	    var subkey = _.find(priv_key[0].subKeys, function(privSubkey){
 	    	return privSubkey.publicKey.getKeyId() == sesskey.keyId.bytes;
 	    });
-
 	    if (subkey){
 	    	keymat = { key: priv_key[0], keymaterial: subkey};
 	    }
     }
 
-
-
-    /*
-    for (var i = 0; i < msg[0].sessionKeys.length; i++) {
-      if (priv_key[0].privateKeyPacket.publicKey.getKeyId() == msg[0].sessionKeys[i].keyId.bytes) {
-        keymat = { key: priv_key[0], keymaterial: priv_key[0].privateKeyPacket};
-        sesskey = msg[0].sessionKeys[i];
-        break;
-      }
-      for (var j = 0; j < priv_key[0].subKeys.length; j++) {
-        if (priv_key[0].subKeys[j].publicKey.getKeyId() == msg[0].sessionKeys[i].keyId.bytes) {
-          keymat = { key: priv_key[0], keymaterial: priv_key[0].subKeys[j]};
-          sesskey = msg[0].sessionKeys[i];
-          break;
-        }
-      }
-    }*/
     if (keymat) {
-      try {
-      	return [msg[0].decrypt(keymat, sesskey), recipientNames];
-      } catch(error) {
-      	return [false, recipientNames];
-      }
-      
+      	try {
+      		return [msg[0].decrypt(keymat, sesskey), recipientNames];
+      	} catch(error) {
+      		return [false, recipientNames];
+      	}
     } else {
       return [false, recipientNames];
     }
@@ -202,7 +157,6 @@ function decrypt(messageText, privateKey) {
 
 
 function attemptToDecrypt(ciphertext, callback) {
-	//console.log("MC", messageCache);
 	var hashKey = hashCode(ciphertext);
 	if (messageCache[hashKey] && messageCache[hashKey].plaintext) {
 		console.log("Cache hit");
@@ -211,18 +165,13 @@ function attemptToDecrypt(ciphertext, callback) {
 		callback();
 	} else {
 		console.log("Cache miss");
-		var plaintext = false;
-		var recipients = "(unknown)";
-		var private_key_usernames = Object.keys(PRIVATE_KEYS);
-		for (var i=0; i<private_key_usernames.length; i++) {
-			var res = decrypt(ciphertext, PRIVATE_KEYS[private_key_usernames[i]].privateKey);
-			plaintext = res[0];
+		var plaintext = false, recipients = "(unknown)";
+		_.find(Object.keys(PRIVATE_KEYS), function(privateKeyUsername){
+			var res = decrypt(ciphertext, PRIVATE_KEYS[privateKeyUsername].privateKey);
+			plaintext  = res[0];
 			recipients = res[1];
-			if (plaintext) {
-				break;
-			}
-		}
-		//console.log("LOL!!!");
+			return !!plaintext;
+		});
 		var recipientsString = analyzeRecipients(recipients);
 		messageCache[hashKey] = {
 			ciphertext: ciphertext,
@@ -230,62 +179,77 @@ function attemptToDecrypt(ciphertext, callback) {
 			lastAccessed: (new Date()).getTime(),
 			recipientsString: recipientsString
 		}
-		//var ii = Math.random();
-		//console.log("WRITING:", ii, messageCache);
 		chrome.storage.local.set({'messageCache': messageCache}, callback);
 	}
 }
-/* {
-	plaintext = "hello",
-	lastAccessed = someTime,
-	recipientsString = "@group1 user1 !user2"
-}*/
 
 
 
 //Given a list of usernames, find the most concise representation
 //in terms of the groups that we have defined.
 function analyzeRecipients(recipientNames) {
-	var candidates = [[]];
+	/*var candidates = [[]];
 	var extras = 0;
-	for (var i=0; i<recipientNames.length; i++) {
-		if (recipientNames[i] === "+") {
+	_.each(recipientNames, function(recipientName){
+		if (recipientName === "+") {
 			extras += 1;
 		} else {
-			candidates[0].push(recipientNames[i]);
+			candidates[0].push(recipientName);
 		}
-	}
-	for (var i=0; i<userGroups.length; i++) {
-		var group = userGroups[i];
-		var candidate = ["@"+group.name];
-		//For each recipient NOT in the group, add their name.
-		for (var j=0; j<recipientNames.length; j++) {
-			var un = recipientNames[j];
-			if (un === "+") {
-				break;
-			} else {
-				if (group.members.indexOf(un) === -1) {
-					candidate.push(un);
-				}
-			}
-		}
-		//For each group member NOT a recipient, add an !exclusion.
-		for (var j=0; j<group.members.length; j++) {
-			var uun = group.members[j];
-			if (recipientNames.indexOf(uun) === -1) {
-				candidate.push("!"+uun);
-			}
-		}
+	});*/
+
+	// How many "+" are there?
+	var extras = _.filter(recipientNames, function(recipientName) {
+		return recipientName === "+";
+	}).length;
+
+	// Make a candidate analysis for each group.
+	var candidates = _.map(userGroups, function(group){
+		// List all recipients who are NOT in this group,
+		var inclusions = _.filter(recipientNames, function(recipient){
+			return (recipient !== "+" && group.members.indexOf(recipient) === -1);
+		});
+
+		// List all group members who are NOT recipients
+		var exclusions = _.filter(group.members, function(groupMember){
+			return (recipientNames.indexOf(groupMember) === -1);
+		});
+		exclusions = _.map(exclusions, function(excludedName){
+			return "!"+excludedName;
+		});
+
+		var candidate = ["@"+group.name].concat(inclusions).concat(exclusions);
+		return candidate;
+	});
+
+	// Groupless candidate: Simply list all recipients' names.
+	var grouplessCandidate = _.filter(recipientNames, function(recipientName) {
+		return recipientName !== "+";
+	});
+
+	candidates.push(grouplessCandidate);
+
+	// Find the most concise (i.e. shortest) candidate.
+
+	var bestCandidate = _.min(candidates, function(candidate){
+		return candidate.length;
+	});
+
+	/*
+	_.each(userGroups, function(group){
+
 		candidates.push(candidate);
-		
-	}
+	});*/
+
+
+	/*
 	var bestSoFar;
 	for (var i=0; i<candidates.length; i++) {
 		if (!bestSoFar || bestSoFar.length > candidates[i].length) {
 			bestSoFar = candidates[i];
 		}
-	}
-	return bestSoFar.join(" ") + (extras ? " +"+extras : "");
+	}*/
+	return bestCandidate.join(" ") + (extras ? " +"+extras : "");
 }
 
 
