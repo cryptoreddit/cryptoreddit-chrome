@@ -459,7 +459,6 @@ function undistinguishPublicKeyElement(element) {
 
 
 function addEncryptionOptions(form, author, modmailSubreddit) {
-	//console.log("AEO!!!!!!");
 	if (!modmailSubreddit) {
 		modmailSubreddit = "";
 	}
@@ -469,7 +468,7 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 	} else if (modmailSubreddit !== "") {
 		sr = modmailSubreddit.slice(2);
 	}
-	//console.log("THE SUBREDDIT IS:", sr, "AND THE PUBLIC_KEYS:", PUBLIC_KEYS);
+
 	var cancelB = form.find('.cancel').first();
 	var ta = form.find('textarea').first();
 
@@ -483,32 +482,20 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 	).insertAfter(ta);
 	ta.css("display","none");
 
-	//ta.addClass("encrypted");
-	//ta.css('background-color','black').css('color','white');
 	var eb = $('<span class="encryptbox"><input type="checkbox" checked="checked" />encrypt </span>').insertAfter(cancelB);
 
-	var inGroups = [];
-	for (var i=0; i<userGroups.length; i++) {
-		var group = userGroups[i];
-		if (group.members.indexOf(author) !== -1 ) {
-			inGroups.push(group);
-		}
-	}
-	//var groupsMenu;
-	//if (true || sr || inGroups.length > 0) {
+	var inGroups = _.filter(userGroups, function(group){
+		return group.members.indexOf(author) !== -1;
+	});
+
 	var groupsMenu = $('<select class="encryptselector">'+
 		(sr&&PUBLIC_KEYS[sr] ? '<option value="'+sr+'">/r'+sr+'</option>' : '')+
 		(PUBLIC_KEYS[author] ? '<option value="">to us only</option>' : '')+
-		(function(){
-			var list="";
-			for (var i=0; i<inGroups.length; i++) {
-				list += ('<option value="'+inGroups[i].name+'"">@'+inGroups[i].name+'</option>');
-			}
-			return list;
-		})()+
+		_.map(inGroups, function(group){
+			return '<option value="'+group.name+'"">@'+group.name+'</option>';
+		}).join("")+
 		'</select>').insertAfter(eb);
 	groupsMenu.css("width", resIsEnabled ? "100px" : "120px");
-	//}
 	eb.on('change', function(){
 		if (ta.css("display")==="none") {
 			if (groupsMenu) {
@@ -523,7 +510,6 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 			ta.css("display","none");
 			ifr.css("display","block")
 		}
-		//ta.toggleClass("encrypted");
 	});
 	var sb = form.find('.save').first();
 	sb.on('click', function(){
@@ -537,7 +523,6 @@ function addEncryptionOptions(form, author, modmailSubreddit) {
 				myself: postingAs
 			}, "chrome-extension://"+chrome.runtime.id);
 			console.log("Requested ciphertext");
-
 			return false;
 		} else {
 			var plaintext = ta.val();
@@ -565,6 +550,8 @@ function removeEncryptionOptions(form) {
 }
 
 var topFormIsEncryptable = false;
+
+
 
 var mainFunction = function() {
 
